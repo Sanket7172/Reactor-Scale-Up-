@@ -3,7 +3,7 @@ import math
 from libraries.agitator_geometry import AGITATORS
 
 
-def calculate_results(
+def calculate_reactor(
     volume_m3,
     tank_diameter_m,
     liquid_height_m,
@@ -15,20 +15,6 @@ def calculate_results(
     number_impellers,
     agitator
 ):
-    """
-    Reactor mixing and scale-up calculations.
-
-    All calculation inputs are expected in SI units:
-        volume_m3              -> m3
-        tank_diameter_m        -> m
-        liquid_height_m        -> m
-        density_kg_m3          -> kg/m3
-        viscosity_pa_s         -> Pa.s
-        surface_tension_n_m    -> N/m
-        rpm                    -> rev/min
-        impeller_diameter_m    -> m
-        number_impellers       -> dimensionless
-    """
 
     # ---------------------------------------------------------
     # VALIDATION
@@ -40,8 +26,11 @@ def calculate_results(
     if tank_diameter_m <= 0:
         raise ValueError("Tank diameter must be greater than zero.")
 
-    if liquid_height_m < 0:
-        raise ValueError("Liquid height cannot be negative.")
+    if impeller_diameter_m <= 0:
+        raise ValueError("Impeller diameter must be greater than zero.")
+
+    if rpm <= 0:
+        raise ValueError("RPM must be greater than zero.")
 
     if density_kg_m3 <= 0:
         raise ValueError("Density must be greater than zero.")
@@ -49,36 +38,22 @@ def calculate_results(
     if viscosity_pa_s <= 0:
         raise ValueError("Viscosity must be greater than zero.")
 
-    if rpm <= 0:
-        raise ValueError("RPM must be greater than zero.")
-
-    if impeller_diameter_m <= 0:
-        raise ValueError("Impeller diameter must be greater than zero.")
-
     if number_impellers <= 0:
-        raise ValueError(
-            "Number of impellers must be greater than zero."
-        )
+        raise ValueError("Number of impellers must be greater than zero.")
 
     # ---------------------------------------------------------
     # AGITATOR DATA
     # ---------------------------------------------------------
 
-    agitator_data = AGITATORS.get(agitator)
+    agitator_info = AGITATORS.get(agitator, {})
 
-    if agitator_data is None:
-        raise ValueError(
-            f"Unknown agitator type: {agitator}"
-        )
-
-    Np = agitator_data.get("np")
-    Nq = agitator_data.get("nq")
+    Np = agitator_info.get("np")
+    Nq = agitator_info.get("nq")
 
     # ---------------------------------------------------------
-    # SPEED
+    # BASIC SPEED
     # ---------------------------------------------------------
 
-    # RPM -> revolutions per second
     N = rpm / 60.0
 
     # ---------------------------------------------------------
@@ -98,8 +73,7 @@ def calculate_results(
     reynolds = (
         density_kg_m3 *
         N *
-        impeller_diameter_m ** 2
-        /
+        impeller_diameter_m ** 2 /
         viscosity_pa_s
     )
 
@@ -111,18 +85,17 @@ def calculate_results(
 
     froude = (
         N ** 2 *
-        impeller_diameter_m
-        /
+        impeller_diameter_m /
         g
     )
 
     # ---------------------------------------------------------
-    # POWER CALCULATION
+    # POWER
     # ---------------------------------------------------------
 
     if Np is not None:
 
-        power_per_impeller_w = (
+        power_per_impeller = (
             Np *
             density_kg_m3 *
             N ** 3 *
@@ -130,52 +103,37 @@ def calculate_results(
         )
 
         total_power_w = (
-            power_per_impeller_w *
+            power_per_impeller *
             number_impellers
         )
 
-        power_kw = (
-            total_power_w /
-            1000.0
-        )
+        power_kw = total_power_w / 1000.0
 
-        # W/m3
-        power_per_volume = (
+        power_volume = (
             total_power_w /
             volume_m3
         )
 
     else:
 
-        # RCI or other agitators where Np
-        # is not yet defined
-        power_kw = float("nan")
-
-        power_per_volume = float("nan")
+        power_kw = None
+        power_volume = None
 
     # ---------------------------------------------------------
     # TORQUE
     # ---------------------------------------------------------
 
-    if (
-        N > 0
-        and not math.isnan(power_kw)
-    ):
+    if power_kw is not None:
 
         torque_nm = (
             power_kw *
-            1000.0
-            /
-            (
-                2.0 *
-                math.pi *
-                N
-            )
+            1000.0 /
+            (2.0 * math.pi * N)
         )
 
     else:
 
-        torque_nm = float("nan")
+        torque_nm = None
 
     # ---------------------------------------------------------
     # PUMPING CAPACITY
@@ -197,16 +155,13 @@ def calculate_results(
 
     else:
 
-        pumping_m3_h = float("nan")
+        pumping_m3_h = None
 
     # ---------------------------------------------------------
     # TURNOVER TIME
     # ---------------------------------------------------------
 
-    if (
-        pumping_m3_h > 0
-        and not math.isnan(pumping_m3_h)
-    ):
+    if pumping_m3_h is not None and pumping_m3_h > 0:
 
         turnover_time_min = (
             volume_m3 /
@@ -216,7 +171,7 @@ def calculate_results(
 
     else:
 
-        turnover_time_min = float("nan")
+        turnover_time_min = None
 
     # ---------------------------------------------------------
     # RETURN RESULTS
@@ -224,47 +179,25 @@ def calculate_results(
 
     return {
 
-        # Geometry / liquid
-        "liquid_height": liquid_height_m,
-
-        # Mixing
         "tip_speed": tip_speed,
-
-        "reynolds_number": reynolds,
 
         "Re": reynolds,
 
-        "froude_number": froude,
+        "reynolds_number": reynolds,
 
         "Fr": froude,
 
-        # Power
+        "froude_number": froude,
+
         "power_kw": power_kw,
 
-        "power_per_volume": power_per_volume,
+        "power_volume": power_volume,
 
-        "power_volume": power_per_volume,
+        "power_per_volume": power_volume,
 
-        # Mechanical
         "torque_nm": torque_nm,
 
-        # Pumping
         "pumping_m3_h": pumping_m3_h,
 
         "turnover_time_min": turnover_time_min,
-
-        # Additional inputs for future calculations
-        "density_kg_m3": density_kg_m3,
-
-        "viscosity_pa_s": viscosity_pa_s,
-
-        "surface_tension_n_m": surface_tension_n_m,
-
-        "rpm": rpm,
-
-        "impeller_diameter_m": impeller_diameter_m,
-
-        "number_impellers": number_impellers,
-
-        "agitator": agitator,
     }
