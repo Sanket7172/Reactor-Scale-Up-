@@ -3,7 +3,7 @@ import numpy as np
 
 
 # =========================================================
-# REACTOR HEAD LIBRARY
+# HEAD DATABASE
 # =========================================================
 
 REACTOR_HEADS = {
@@ -11,50 +11,34 @@ REACTOR_HEADS = {
     "Flat Bottom": {
         "type": "flat",
         "depth_ratio": 0.0,
-        "description": "Flat reactor bottom",
     },
 
     "2:1 Ellipsoidal": {
         "type": "ellipsoidal",
         "depth_ratio": 0.25,
-        "description": "2:1 ellipsoidal head",
     },
 
     "10% Torispherical": {
         "type": "torispherical",
         "depth_ratio": 0.10,
-        "description": "10% torispherical head",
     },
 
     "6% Torispherical": {
         "type": "torispherical",
         "depth_ratio": 0.06,
-        "description": "6% torispherical head",
     },
 
     "Hemispherical": {
         "type": "hemispherical",
         "depth_ratio": 0.50,
-        "description": "Hemispherical head",
     },
 
     "Conical": {
         "type": "conical",
         "depth_ratio": 0.25,
-        "description": "Conical bottom/top",
     },
 }
 
-
-# =========================================================
-# BACKWARD COMPATIBILITY
-# =========================================================
-# Your older app.py uses HEADS.
-# Keeping this alias prevents:
-#
-# ImportError: cannot import name 'HEADS'
-#
-# =========================================================
 
 HEADS = REACTOR_HEADS
 
@@ -63,62 +47,38 @@ HEADS = REACTOR_HEADS
 # HEAD DEPTH
 # =========================================================
 
-def head_depth(D, head_type):
-    """
-    Calculate approximate head depth.
+def head_depth(
+    D,
+    head_type,
+):
 
-    Parameters
-    ----------
-    D : float
-        Reactor inside diameter [m]
+    data = REACTOR_HEADS.get(
+        head_type,
+        {}
+    )
 
-    head_type : str
-        Reactor head type
-
-    Returns
-    -------
-    float
-        Head depth [m]
-    """
-
-    if D <= 0:
-        return 0.0
-
-    if head_type not in REACTOR_HEADS:
-        raise ValueError(
-            f"Unknown reactor head type: {head_type}"
-        )
-
-    ratio = REACTOR_HEADS[head_type]["depth_ratio"]
+    ratio = data.get(
+        "depth_ratio",
+        0.0
+    )
 
     return D * ratio
 
 
 # =========================================================
-# CYLINDRICAL VOLUME
+# CYLINDER VOLUME
 # =========================================================
 
 def cylindrical_volume(
     D,
-    straight_height
+    H,
 ):
-    """
-    Calculate cylindrical section volume.
-
-    D                  -> m
-    straight_height    -> m
-
-    Returns volume in m3.
-    """
-
-    if D <= 0 or straight_height <= 0:
-        return 0.0
 
     return (
-        math.pi *
-        D ** 2 /
+        math.pi /
         4.0 *
-        straight_height
+        D ** 2 *
+        H
     )
 
 
@@ -128,72 +88,73 @@ def cylindrical_volume(
 
 def head_volume(
     D,
-    head_type
+    head_type,
 ):
-    """
-    Approximate reactor head volume.
 
-    This is a simplified engineering visualization
-    model and should not be used as a final vessel
-    fabrication volume calculation.
-    """
-
-    depth = head_depth(
+    h = head_depth(
         D,
         head_type
     )
 
+    if h <= 0:
+        return 0.0
+
     area = (
-        math.pi *
-        D ** 2 /
-        4.0
+        math.pi /
+        4.0 *
+        D ** 2
     )
 
-    return area * depth
+    head = REACTOR_HEADS[
+        head_type
+    ]
+
+    head_kind = head[
+        "type"
+    ]
+
+    if head_kind == "hemispherical":
+
+        return (
+            2.0 /
+            3.0 *
+            math.pi *
+            (D / 2.0) ** 3
+        )
+
+    elif head_kind == "conical":
+
+        return (
+            1.0 /
+            3.0 *
+            area *
+            h
+        )
+
+    elif head_kind == "flat":
+
+        return 0.0
+
+    else:
+
+        # Screening approximation
+        return (
+            0.65 *
+            area *
+            h
+        )
 
 
 # =========================================================
-# TOTAL REACTOR VOLUME
+# TOTAL VOLUME
 # =========================================================
 
 def calculate_total_volume(
     D,
     straight_height,
     bottom_type,
-    top_type
+    top_type,
 ):
-    """
-    Calculate approximate total reactor volume.
-
-    Parameters
-    ----------
-    D : float
-        Reactor inside diameter [m]
-
-    straight_height : float
-        Straight shell height [m]
-
-    bottom_type : str
-        Bottom head type
-
-    top_type : str
-        Top head type
-
-    Returns
-    -------
-    float
-        Approximate total volume [m3]
-    """
-
-    if D <= 0:
-        raise ValueError(
-            "Reactor diameter must be greater than zero."
-        )
-
-    if straight_height <= 0:
-        raise ValueError(
-            "Straight height must be greater than zero."
-        )
 
     cylinder = cylindrical_volume(
         D,
@@ -218,280 +179,7 @@ def calculate_total_volume(
 
 
 # =========================================================
-# VOLUME AT A GIVEN LIQUID HEIGHT
-# =========================================================
-
-def volume_at_height(
-    height,
-    D,
-    straight_height,
-    bottom_type,
-    top_type
-):
-    """
-    Calculate approximate liquid volume at a
-    specified liquid height.
-
-    All dimensions are in meters.
-    """
-
-    bottom_depth = head_depth(
-        D,
-        bottom_type
-    )
-
-    top_depth = head_depth(
-        D,
-        top_type
-    )
-
-    cylinder_area = (
-        math.pi *
-        D ** 2 /
-        4.0
-    )
-
-    total_height = (
-        bottom_depth +
-        straight_height +
-        top_depth
-    )
-
-    # Limit height to vessel boundaries
-    height = max(
-        0.0,
-        min(
-            height,
-            total_height
-        )
-    )
-
-    # -----------------------------------------------------
-    # BOTTOM HEAD
-    # -----------------------------------------------------
-
-    if height <= bottom_depth:
-
-        if bottom_depth <= 0:
-            return 0.0
-
-        fraction = (
-            height /
-            bottom_depth
-        )
-
-        return (
-            cylinder_area *
-            bottom_depth *
-            fraction ** 2
-        )
-
-    # -----------------------------------------------------
-    # CYLINDRICAL SECTION
-    # -----------------------------------------------------
-
-    cylinder_start = bottom_depth
-
-    cylinder_end = (
-        bottom_depth +
-        straight_height
-    )
-
-    if height <= cylinder_end:
-
-        cylinder_height = (
-            height -
-            cylinder_start
-        )
-
-        return (
-            head_volume(
-                D,
-                bottom_type
-            )
-            +
-            cylinder_area *
-            cylinder_height
-        )
-
-    # -----------------------------------------------------
-    # TOP HEAD
-    # -----------------------------------------------------
-
-    liquid_in_top = (
-        height -
-        cylinder_end
-    )
-
-    if top_depth > 0:
-
-        top_fraction = (
-            liquid_in_top /
-            top_depth
-        )
-
-    else:
-
-        top_fraction = 1.0
-
-    top_fraction = max(
-        0.0,
-        min(
-            top_fraction,
-            1.0
-        )
-    )
-
-    top_total_volume = head_volume(
-        D,
-        top_type
-    )
-
-    # Approximate spherical-cap type filling
-    top_volume = (
-        top_total_volume *
-        (
-            2.0 *
-            top_fraction -
-            top_fraction ** 2
-        )
-    )
-
-    return (
-        head_volume(
-            D,
-            bottom_type
-        )
-        +
-        cylindrical_volume(
-            D,
-            straight_height
-        )
-        +
-        top_volume
-    )
-
-
-# =========================================================
-# LIQUID HEIGHT FROM WORKING VOLUME
-# =========================================================
-
-def liquid_height_from_volume(
-    working_volume,
-    D,
-    straight_height,
-    bottom_type,
-    top_type
-):
-    """
-    Calculate liquid height corresponding to
-    the specified working volume.
-
-    Returns
-    -------
-    liquid_height_m
-    total_vessel_volume_m3
-    """
-
-    total_volume = calculate_total_volume(
-        D,
-        straight_height,
-        bottom_type,
-        top_type
-    )
-
-    # -----------------------------------------------------
-    # ZERO / NEGATIVE VOLUME
-    # -----------------------------------------------------
-
-    if working_volume <= 0:
-
-        return (
-            0.0,
-            total_volume
-        )
-
-    # -----------------------------------------------------
-    # WORKING VOLUME >= TOTAL VOLUME
-    # -----------------------------------------------------
-
-    if working_volume >= total_volume:
-
-        total_height = (
-            head_depth(
-                D,
-                bottom_type
-            )
-            +
-            straight_height
-            +
-            head_depth(
-                D,
-                top_type
-            )
-        )
-
-        return (
-            total_height,
-            total_volume
-        )
-
-    # -----------------------------------------------------
-    # BINARY SEARCH
-    # -----------------------------------------------------
-
-    low = 0.0
-
-    high = (
-        head_depth(
-            D,
-            bottom_type
-        )
-        +
-        straight_height
-        +
-        head_depth(
-            D,
-            top_type
-        )
-    )
-
-    for _ in range(80):
-
-        mid = (
-            low +
-            high
-        ) / 2.0
-
-        calculated_volume = volume_at_height(
-            mid,
-            D,
-            straight_height,
-            bottom_type,
-            top_type
-        )
-
-        if calculated_volume < working_volume:
-
-            low = mid
-
-        else:
-
-            high = mid
-
-    liquid_height = (
-        low +
-        high
-    ) / 2.0
-
-    return (
-        liquid_height,
-        total_volume
-    )
-
-
-# =========================================================
-# REACTOR PROFILE FOR 3D VISUALIZATION
+# PROFILE
 # =========================================================
 
 def profile(
@@ -499,171 +187,128 @@ def profile(
     straight_height,
     bottom_type,
     top_type,
-    points=160
+    n_points=100,
 ):
-    """
-    Generate a simplified reactor radial profile.
 
-    Returns
-    -------
-    z : numpy array
-        Vertical coordinates [m]
-
-    r : numpy array
-        Radius coordinates [m]
-
-    Used by reactor_3d.py.
-    """
-
-    if D <= 0:
-        raise ValueError(
-            "Reactor diameter must be greater than zero."
-        )
-
-    if straight_height <= 0:
-        raise ValueError(
-            "Straight height must be greater than zero."
-        )
-
-    bottom_depth = head_depth(
+    bottom_h = head_depth(
         D,
         bottom_type
     )
 
-    top_depth = head_depth(
+    top_h = head_depth(
         D,
         top_type
     )
 
-    radius = D / 2.0
-
-    # -----------------------------------------------------
-    # BOTTOM HEAD
-    # -----------------------------------------------------
-
-    if bottom_depth > 0:
-
-        z_bottom = np.linspace(
-            0.0,
-            bottom_depth,
-            max(
-                10,
-                points // 4
-            )
-        )
-
-        fraction = (
-            z_bottom /
-            bottom_depth
-        )
-
-        r_bottom = (
-            radius *
-            np.sqrt(
-                fraction
-            )
-        )
-
-    else:
-
-        z_bottom = np.array([
-            0.0
-        ])
-
-        r_bottom = np.array([
-            radius
-        ])
-
-    # -----------------------------------------------------
-    # CYLINDRICAL SHELL
-    # -----------------------------------------------------
-
-    z_cylinder = np.linspace(
-        bottom_depth,
-        bottom_depth +
-        straight_height,
+    # Bottom
+    zb = np.linspace(
+        0,
+        bottom_h,
         max(
-            20,
-            points // 2
+            10,
+            n_points // 5
         )
     )
 
-    r_cylinder = np.full_like(
-        z_cylinder,
-        radius
+    rb = np.zeros_like(
+        zb
     )
 
-    # -----------------------------------------------------
-    # TOP HEAD
-    # -----------------------------------------------------
+    if bottom_h > 0:
 
-    if top_depth > 0:
-
-        z_top = np.linspace(
-            bottom_depth +
-            straight_height,
-
-            bottom_depth +
-            straight_height +
-            top_depth,
-
-            max(
-                10,
-                points // 4
-            )
+        ratio = (
+            zb /
+            bottom_h
         )
 
-        fraction = (
-            z_top -
-            (
-                bottom_depth +
-                straight_height
-            )
-        ) / top_depth
-
-        r_top = (
-            radius *
+        rb = (
+            D /
+            2.0 *
             np.sqrt(
-                np.maximum(
-                    0.0,
-                    1.0 -
-                    fraction
+                np.clip(
+                    ratio,
+                    0,
+                    1
                 )
             )
         )
 
-    else:
+    # Straight
+    zs = np.linspace(
+        bottom_h,
+        bottom_h + straight_height,
+        max(
+            10,
+            n_points // 2
+        )
+    )
 
-        z_top = np.array([
-            bottom_depth +
-            straight_height
-        ])
+    rs = np.full_like(
+        zs,
+        D / 2.0
+    )
 
-        r_top = np.array([
-            radius
-        ])
+    # Top
+    zt = np.linspace(
+        bottom_h + straight_height,
+        bottom_h + straight_height + top_h,
+        max(
+            10,
+            n_points // 5
+        )
+    )
 
-    # -----------------------------------------------------
-    # COMBINE PROFILE
-    # -----------------------------------------------------
+    rt = np.zeros_like(
+        zt
+    )
 
-    z = np.concatenate([
-        z_bottom,
-        z_cylinder[1:],
-        z_top[1:]
-    ])
+    if top_h > 0:
 
-    r = np.concatenate([
-        r_bottom,
-        r_cylinder[1:],
-        r_top[1:]
-    ])
+        ratio = (
+            (
+                zt -
+                (
+                    bottom_h +
+                    straight_height
+                )
+            )
+            /
+            top_h
+        )
+
+        rt = (
+            D /
+            2.0 *
+            np.sqrt(
+                np.clip(
+                    1.0 - ratio,
+                    0,
+                    1
+                )
+            )
+        )
+
+    z = np.concatenate(
+        [
+            zb,
+            zs[1:],
+            zt[1:],
+        ]
+    )
+
+    r = np.concatenate(
+        [
+            rb,
+            rs[1:],
+            rt[1:],
+        ]
+    )
 
     return z, r
 
 
 # =========================================================
-# RADIUS AT A GIVEN HEIGHT
+# RADIUS AT HEIGHT
 # =========================================================
 
 def radius_at_height(
@@ -671,99 +316,147 @@ def radius_at_height(
     D,
     straight_height,
     bottom_type,
-    top_type
+    top_type,
 ):
-    """
-    Return reactor radius at a specified vertical
-    coordinate.
 
-    Used by reactor_3d.py.
-    """
-
-    bottom_depth = head_depth(
-        D,
-        bottom_type
+    z_profile, r_profile = profile(
+        D=D,
+        straight_height=straight_height,
+        bottom_type=bottom_type,
+        top_type=top_type,
+        n_points=300,
     )
 
-    top_depth = head_depth(
-        D,
-        top_type
+    return float(
+        np.interp(
+            z,
+            z_profile,
+            r_profile,
+        )
     )
 
-    radius = D / 2.0
 
-    total_height = (
-        bottom_depth +
-        straight_height +
-        top_depth
-    )
+# =========================================================
+# LIQUID HEIGHT FROM VOLUME
+# =========================================================
 
-    # Keep z within reactor limits
+def volume_at_height(
+    z,
+    D,
+    straight_height,
+    bottom_type,
+    top_type,
+):
+
     z = max(
         0.0,
-        min(
-            z,
-            total_height
-        )
+        z
     )
 
-    # -----------------------------------------------------
-    # BOTTOM HEAD
-    # -----------------------------------------------------
+    z_profile, r_profile = profile(
+        D=D,
+        straight_height=straight_height,
+        bottom_type=bottom_type,
+        top_type=top_type,
+        n_points=500,
+    )
 
-    if z <= bottom_depth:
+    z = min(
+        z,
+        z_profile[-1]
+    )
 
-        if bottom_depth <= 0:
-            return radius
+    mask = (
+        z_profile <= z
+    )
 
-        fraction = (
-            z /
-            bottom_depth
+    zz = z_profile[
+        mask
+    ]
+
+    rr = r_profile[
+        mask
+    ]
+
+    if len(zz) < 2:
+        return 0.0
+
+    # Numerical integration
+    volume = np.trapezoid(
+        math.pi *
+        rr ** 2,
+        zz
+    )
+
+    return float(
+        volume
+    )
+
+
+def liquid_height_from_volume(
+    working_volume,
+    D,
+    straight_height,
+    bottom_type,
+    top_type,
+):
+
+    total_height = (
+        head_depth(
+            D,
+            bottom_type
         )
-
-        return (
-            radius *
-            math.sqrt(
-                max(
-                    0.0,
-                    fraction
-                )
-            )
-        )
-
-    # -----------------------------------------------------
-    # CYLINDRICAL SECTION
-    # -----------------------------------------------------
-
-    cylinder_end = (
-        bottom_depth +
+        +
         straight_height
+        +
+        head_depth(
+            D,
+            top_type
+        )
     )
 
-    if z <= cylinder_end:
+    total_volume = (
+        calculate_total_volume(
+            D=D,
+            straight_height=straight_height,
+            bottom_type=bottom_type,
+            top_type=top_type,
+        )
+    )
 
-        return radius
+    if working_volume <= 0:
+        return 0.0, total_volume
 
-    # -----------------------------------------------------
-    # TOP HEAD
-    # -----------------------------------------------------
+    if working_volume >= total_volume:
+        return total_height, total_volume
 
-    if top_depth <= 0:
+    low = 0.0
+    high = total_height
 
-        return radius
+    for _ in range(70):
 
-    fraction = (
-        z -
-        cylinder_end
-    ) / top_depth
+        mid = (
+            low +
+            high
+        ) / 2.0
+
+        volume = volume_at_height(
+            mid,
+            D,
+            straight_height,
+            bottom_type,
+            top_type,
+        )
+
+        if volume < working_volume:
+
+            low = mid
+
+        else:
+
+            high = mid
 
     return (
-        radius *
-        math.sqrt(
-            max(
-                0.0,
-                1.0 -
-                fraction
-            )
-        )
+        (low + high) / 2.0,
+        total_volume,
     )
