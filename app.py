@@ -1,4 +1,3 @@
-import math
 import streamlit as st
 import pandas as pd
 
@@ -17,7 +16,7 @@ from visualization.reactor_3d import create_reactor_animation
 
 
 # =========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -36,56 +35,174 @@ st.markdown(
     """
     <style>
 
-    .main {
-        background-color: #f5f7fa;
-    }
+    /* ---------- MAIN PAGE ---------- */
 
     .block-container {
         padding-top: 1.5rem;
-        padding-bottom: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1500px;
     }
 
-    .metric-card {
-        background: white;
-        padding: 18px;
-        border-radius: 12px;
-        border: 1px solid #e3e7ed;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        text-align: center;
+
+    /* ---------- HEADER ---------- */
+
+    .dashboard-header {
+        padding: 22px 28px;
+        border-radius: 16px;
+        margin-bottom: 24px;
+        background: linear-gradient(
+            135deg,
+            #eef4ff 0%,
+            #ffffff 60%,
+            #f4f8ff 100%
+        );
+        border: 1px solid #d9e2f2;
     }
 
-    .section-card {
-        background: white;
-        padding: 20px;
+    .dashboard-title {
+        font-size: 2.2rem;
+        font-weight: 800;
+        margin-bottom: 5px;
+        color: #172033;
+    }
+
+    .dashboard-subtitle {
+        font-size: 1rem;
+        color: #667085;
+    }
+
+
+    /* ---------- SECTION HEADER ---------- */
+
+    .section-title {
+        font-size: 1.35rem;
+        font-weight: 750;
+        color: #172033;
+        margin-top: 20px;
+        margin-bottom: 12px;
+    }
+
+
+    /* ---------- KPI CARD ---------- */
+
+    .kpi-card {
+        background: #ffffff;
+        border: 1px solid #e1e6ef;
         border-radius: 14px;
-        border: 1px solid #e3e7ed;
+        padding: 18px 16px;
+        min-height: 145px;
+        box-shadow: 0 3px 12px rgba(16, 24, 40, 0.06);
+        margin-bottom: 12px;
+    }
+
+    .kpi-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: #667085;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+
+    .kpi-value {
+        font-size: clamp(1.45rem, 2.2vw, 2rem);
+        line-height: 1.15;
+        font-weight: 800;
+        color: #101828;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .kpi-unit {
+        font-size: 0.90rem;
+        font-weight: 600;
+        color: #667085;
+        margin-top: 5px;
+    }
+
+    .kpi-note {
+        font-size: 0.72rem;
+        color: #98A2B3;
+        margin-top: 8px;
+    }
+
+
+    /* ---------- OPERATING CARD ---------- */
+
+    .operating-card {
+        background: #ffffff;
+        border: 1px solid #e1e6ef;
+        border-radius: 14px;
+        padding: 18px;
+        margin-top: 8px;
+        margin-bottom: 18px;
+        box-shadow: 0 2px 10px rgba(16, 24, 40, 0.04);
+    }
+
+    .operating-title {
+        font-size: 0.95rem;
+        font-weight: 750;
+        color: #344054;
         margin-bottom: 15px;
     }
 
-    .small-text {
+    .operating-item {
+        padding: 8px 4px;
+    }
+
+    .operating-label {
+        font-size: 0.75rem;
         color: #667085;
-        font-size: 0.85rem;
+        margin-bottom: 4px;
     }
 
-    .success-box {
-        padding: 12px;
-        border-radius: 10px;
-        border: 1px solid #b7dfc5;
-        background: #f0fff4;
+    .operating-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #101828;
     }
 
-    .warning-box {
-        padding: 12px;
-        border-radius: 10px;
-        border: 1px solid #f2cf75;
-        background: #fffaf0;
+
+    /* ---------- INFO BOX ---------- */
+
+    .engineering-box {
+        background: #f8fafc;
+        border: 1px solid #e4e7ec;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 10px;
+        margin-bottom: 16px;
     }
 
-    .danger-box {
-        padding: 12px;
+
+    /* ---------- SIDEBAR ---------- */
+
+    [data-testid="stSidebar"] {
+        border-right: 1px solid #e4e7ec;
+    }
+
+
+    /* ---------- TABLE ---------- */
+
+    [data-testid="stDataFrame"] {
         border-radius: 10px;
-        border: 1px solid #efb2b2;
-        background: #fff5f5;
+        overflow: hidden;
+    }
+
+
+    /* ---------- MOBILE ---------- */
+
+    @media (max-width: 900px) {
+
+        .dashboard-title {
+            font-size: 1.7rem;
+        }
+
+        .kpi-card {
+            min-height: 125px;
+        }
+
     }
 
     </style>
@@ -98,16 +215,22 @@ st.markdown(
 # HEADER
 # =========================================================
 
-st.title("🏭 Reactor Scale-Up Engineering Studio")
-
 st.markdown(
-    "**Professional screening platform for reactor geometry, "
-    "mixing, agitation, scale-up similarity and engineering validation.**"
-)
+    """
+    <div class="dashboard-header">
 
-st.caption(
-    "Lab → Pilot → Commercial  |  "
-    "Mixing • Geometry • Scale-Up • Mechanical Screening"
+        <div class="dashboard-title">
+            🏭 Reactor Scale-Up Engineering Studio
+        </div>
+
+        <div class="dashboard-subtitle">
+            Reactor geometry • Mixing • Agitation • Scale-up •
+            Hydrodynamics • Engineering validation
+        </div>
+
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -119,12 +242,12 @@ st.sidebar.title("⚙️ Study Configuration")
 
 project_name = st.sidebar.text_input(
     "Project / Study Name",
-    value="Reactor Scale-Up Study",
+    "Reactor Scale-Up Study",
 )
 
 prepared_by = st.sidebar.text_input(
     "Prepared By",
-    value="Process Engineering",
+    "Process Engineering",
 )
 
 study_mode = st.sidebar.selectbox(
@@ -177,34 +300,34 @@ scaleup_basis = st.sidebar.selectbox(
 PROCESS_GUIDANCE = {
 
     "Liquid-Liquid":
-        "Focus on blending, circulation, droplet dispersion and mixing time.",
+        "Focus on blending, circulation and phase dispersion.",
 
     "Solid-Liquid":
-        "Focus on solids suspension, Njs, just-suspended condition and circulation.",
+        "Focus on solids suspension, Njs and circulation.",
 
     "Gas-Liquid":
-        "Focus on gas dispersion, P/V, tip speed, flooding and KLa.",
+        "Focus on gas dispersion, P/V, tip speed and KLa.",
 
     "Gas-Liquid-Solid":
-        "Consider gas dispersion + solids suspension simultaneously.",
+        "Consider gas dispersion and solids suspension together.",
 
     "Crystallization":
-        "Focus on suspension, supersaturation control, shear and heat transfer.",
+        "Consider suspension, shear, heat transfer and crystal quality.",
 
     "Precipitation":
         "Consider mixing intensity, local supersaturation and micromixing.",
 
     "Dissolution":
-        "Focus on solids suspension, wetting and liquid circulation.",
+        "Focus on solids suspension, wetting and circulation.",
 
     "Extraction":
-        "Focus on phase dispersion, interfacial area and coalescence.",
+        "Focus on dispersion, interfacial area and coalescence.",
 
     "Neutralization":
-        "Focus on blending, heat release, addition point and local concentration.",
+        "Focus on blending, heat release and addition-point mixing.",
 
     "General Mixing":
-        "Use P/V, tip speed, Re, Fr and pumping/volume as initial screening criteria.",
+        "Use P/V, tip speed, Re, Fr and Q/V as initial screening parameters.",
 }
 
 
@@ -213,7 +336,7 @@ with st.sidebar.expander("💡 Engineering Guidance"):
     st.info(
         PROCESS_GUIDANCE.get(
             process_type,
-            "Use engineering judgement and validated correlations.",
+            "Use validated engineering correlations.",
         )
     )
 
@@ -255,153 +378,194 @@ reactors = {}
 
 
 # =========================================================
-# REACTOR INPUTS
+# REACTOR DEFINITION
 # =========================================================
 
-st.header("1️⃣ Reactor Definition")
+st.markdown(
+    '<div class="section-title">1️⃣ Reactor Definition</div>',
+    unsafe_allow_html=True,
+)
+
 
 for reactor_name in reactor_names:
 
-    st.subheader(f"🔹 {reactor_name} Reactor")
+    st.subheader(
+        f"🏭 {reactor_name} Reactor"
+    )
 
-    with st.container():
+    # -----------------------------------------------------
+    # PROCESS PARAMETERS
+    # -----------------------------------------------------
 
-        col1, col2, col3 = st.columns(3)
+    st.markdown("##### 🧪 Process Properties")
 
-        # -------------------------------------------------
-        # PROCESS DATA
-        # -------------------------------------------------
+    c1, c2, c3, c4 = st.columns(4)
 
-        with col1:
+    with c1:
 
-            working_volume = st.number_input(
-                f"{reactor_name} Working Volume [m³]",
-                min_value=0.01,
-                value=1.00 if reactor_name == "Lab" else 5.00,
-                step=0.10,
-                key=f"{reactor_name}_volume",
-            )
+        working_volume = st.number_input(
+            "Working Volume [m³]",
+            min_value=0.01,
+            value=1.0,
+            step=0.10,
+            key=f"{reactor_name}_volume",
+        )
 
-            density = st.number_input(
-                f"{reactor_name} Density [kg/m³]",
-                min_value=1.0,
-                value=1000.0,
-                step=10.0,
-                key=f"{reactor_name}_density",
-            )
+    with c2:
 
-            viscosity = st.number_input(
-                f"{reactor_name} Viscosity [mPa·s]",
-                min_value=0.01,
-                value=1.0,
-                step=0.1,
-                key=f"{reactor_name}_viscosity",
-            )
+        density = st.number_input(
+            "Density [kg/m³]",
+            min_value=1.0,
+            value=1000.0,
+            step=10.0,
+            key=f"{reactor_name}_density",
+        )
 
-            surface_tension = st.number_input(
-                f"{reactor_name} Surface Tension [mN/m]",
-                min_value=0.01,
-                value=30.0,
-                step=1.0,
-                key=f"{reactor_name}_surface_tension",
-            )
+    with c3:
 
-        # -------------------------------------------------
-        # VESSEL GEOMETRY
-        # -------------------------------------------------
+        viscosity = st.number_input(
+            "Viscosity [mPa·s]",
+            min_value=0.01,
+            value=1.0,
+            step=0.1,
+            key=f"{reactor_name}_viscosity",
+        )
 
-        with col2:
+    with c4:
 
-            tank_id = st.number_input(
-                f"{reactor_name} Tank ID [mm]",
-                min_value=100.0,
-                value=1000.0 if reactor_name == "Lab" else 1800.0,
-                step=50.0,
-                key=f"{reactor_name}_tank_id",
-            )
+        surface_tension = st.number_input(
+            "Surface Tension [mN/m]",
+            min_value=0.01,
+            value=30.0,
+            step=1.0,
+            key=f"{reactor_name}_surface_tension",
+        )
 
-            straight_height = st.number_input(
-                f"{reactor_name} Straight Height [mm]",
-                min_value=100.0,
-                value=1500.0,
-                step=50.0,
-                key=f"{reactor_name}_straight_height",
-            )
 
-            bottom_type = st.selectbox(
-                f"{reactor_name} Bottom Head",
-                list(REACTOR_HEADS.keys()),
-                index=1,
-                key=f"{reactor_name}_bottom",
-            )
+    # -----------------------------------------------------
+    # VESSEL GEOMETRY
+    # -----------------------------------------------------
 
-            top_type = st.selectbox(
-                f"{reactor_name} Top Head",
-                list(REACTOR_HEADS.keys()),
-                index=1,
-                key=f"{reactor_name}_top",
-            )
+    st.markdown("##### 📐 Vessel Geometry")
 
-        # -------------------------------------------------
-        # AGITATION
-        # -------------------------------------------------
+    c1, c2, c3, c4 = st.columns(4)
 
-        with col3:
+    with c1:
 
-            agitator_type = st.selectbox(
-                f"{reactor_name} Agitator",
-                list(AGITATORS.keys()),
-                index=1,
-                key=f"{reactor_name}_agitator",
-            )
+        tank_id = st.number_input(
+            "Tank ID [mm]",
+            min_value=100.0,
+            value=1000.0,
+            step=50.0,
+            key=f"{reactor_name}_tank_id",
+        )
 
-            agitator_info = AGITATORS[agitator_type]
+    with c2:
 
-            default_ratio = agitator_info.get(
-                "default_diameter_ratio",
-                0.40,
-            )
+        straight_height = st.number_input(
+            "Straight Height [mm]",
+            min_value=100.0,
+            value=1500.0,
+            step=50.0,
+            key=f"{reactor_name}_straight_height",
+        )
 
-            default_impeller_diameter = (
-                tank_id *
-                default_ratio
-            )
+    with c3:
 
-            impeller_diameter = st.number_input(
-                f"{reactor_name} Impeller Diameter [mm]",
-                min_value=20.0,
-                value=float(
-                    default_impeller_diameter
-                ),
-                step=10.0,
-                key=f"{reactor_name}_impeller",
-            )
+        bottom_type = st.selectbox(
+            "Bottom Head",
+            list(REACTOR_HEADS.keys()),
+            index=1,
+            key=f"{reactor_name}_bottom",
+        )
 
-            number_impellers = st.number_input(
-                f"{reactor_name} Number of Impellers",
-                min_value=1,
-                max_value=6,
-                value=1,
-                step=1,
-                key=f"{reactor_name}_nimp",
-            )
+    with c4:
 
-            rpm = st.number_input(
-                f"{reactor_name} Agitator Speed [RPM]",
-                min_value=1.0,
-                value=120.0,
-                step=5.0,
-                key=f"{reactor_name}_rpm",
-            )
+        top_type = st.selectbox(
+            "Top Head",
+            list(REACTOR_HEADS.keys()),
+            index=1,
+            key=f"{reactor_name}_top",
+        )
 
-            baffles = st.number_input(
-                f"{reactor_name} Number of Baffles",
-                min_value=0,
-                max_value=12,
-                value=4,
-                step=1,
-                key=f"{reactor_name}_baffles",
-            )
+
+    # -----------------------------------------------------
+    # AGITATION
+    # -----------------------------------------------------
+
+    st.markdown("##### 🌀 Agitation")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        agitator_type = st.selectbox(
+            "Agitator Type",
+            list(AGITATORS.keys()),
+            index=1,
+            key=f"{reactor_name}_agitator",
+        )
+
+    agitator_info = AGITATORS[agitator_type]
+
+    default_ratio = agitator_info.get(
+        "default_diameter_ratio",
+        0.40,
+    )
+
+    default_impeller = (
+        tank_id *
+        default_ratio
+    )
+
+    with c2:
+
+        impeller_diameter = st.number_input(
+            "Impeller Diameter [mm]",
+            min_value=20.0,
+            value=float(default_impeller),
+            step=10.0,
+            key=f"{reactor_name}_impeller",
+        )
+
+    with c3:
+
+        number_impellers = st.number_input(
+            "Number of Impellers [-]",
+            min_value=1,
+            max_value=6,
+            value=1,
+            step=1,
+            key=f"{reactor_name}_nimp",
+        )
+
+    with c4:
+
+        rpm = st.number_input(
+            "Agitator Speed [RPM]",
+            min_value=1.0,
+            value=120.0,
+            step=5.0,
+            key=f"{reactor_name}_rpm",
+        )
+
+
+    # -----------------------------------------------------
+    # BAFFLES
+    # -----------------------------------------------------
+
+    c1, c2 = st.columns(4)
+
+    with c1:
+
+        baffles = st.number_input(
+            "Baffles [-]",
+            min_value=0,
+            max_value=12,
+            value=4,
+            step=1,
+            key=f"{reactor_name}_baffles",
+        )
 
 
     # =====================================================
@@ -409,13 +573,10 @@ for reactor_name in reactor_names:
     # =====================================================
 
     D = tank_id / 1000.0
-
     H = straight_height / 1000.0
-
     Di = impeller_diameter / 1000.0
 
     mu = viscosity / 1000.0
-
     sigma = surface_tension / 1000.0
 
 
@@ -500,7 +661,6 @@ for reactor_name in reactor_names:
             ),
 
             agitator=agitator_type,
-
         )
 
     except Exception as e:
@@ -545,15 +705,12 @@ for reactor_name in reactor_names:
         density_kg_m3=density,
 
         viscosity_pa_s=mu,
-
     )
 
 
     # =====================================================
     # VORTEX SCREENING
     # =====================================================
-
-    vortex_depth = 0.0
 
     if baffles == 0:
 
@@ -571,212 +728,581 @@ for reactor_name in reactor_names:
 
     else:
 
-        vortex_depth = 0.01 * liquid_height
+        vortex_depth = (
+            0.01 *
+            liquid_height
+        )
 
 
     # =====================================================
-    # STORE DATA
+    # STORE
     # =====================================================
 
     reactors[reactor_name] = {
 
-        "working_volume": working_volume,
+        "working_volume":
+            working_volume,
 
-        "density": density,
+        "density":
+            density,
 
-        "viscosity": viscosity,
+        "viscosity":
+            viscosity,
 
-        "surface_tension": surface_tension,
+        "surface_tension":
+            surface_tension,
 
-        "tank_id_m": D,
+        "tank_id_m":
+            D,
 
-        "straight_height_m": H,
+        "straight_height_m":
+            H,
 
-        "bottom_type": bottom_type,
+        "bottom_type":
+            bottom_type,
 
-        "top_type": top_type,
+        "top_type":
+            top_type,
 
-        "agitator_type": agitator_type,
+        "agitator_type":
+            agitator_type,
 
-        "impeller_diameter_m": Di,
+        "impeller_diameter_m":
+            Di,
 
-        "number_impellers": int(
-            number_impellers
-        ),
+        "number_impellers":
+            int(number_impellers),
 
-        "rpm": rpm,
+        "rpm":
+            rpm,
 
-        "baffles": int(
-            baffles
-        ),
+        "baffles":
+            int(baffles),
 
-        "vessel_volume_m3": vessel_volume,
+        "vessel_volume_m3":
+            vessel_volume,
 
-        "liquid_height_m": liquid_height,
+        "liquid_height_m":
+            liquid_height,
 
-        "fill_percent": fill_percent,
+        "fill_percent":
+            fill_percent,
 
-        "H_over_D": H_over_D,
+        "H_over_D":
+            H_over_D,
 
-        "Di_over_D": Di_over_D,
+        "Di_over_D":
+            Di_over_D,
 
-        "vortex_depth": vortex_depth,
+        "vortex_depth":
+            vortex_depth,
 
-        "results": results,
+        "results":
+            results,
 
-        "validation": validation,
-
+        "validation":
+            validation,
     }
 
 
 # =========================================================
-# KPI DASHBOARD
+# ENGINEERING KPI DASHBOARD
 # =========================================================
 
-st.header("2️⃣ Engineering KPI Dashboard")
+st.markdown(
+    '<div class="section-title">2️⃣ Engineering Performance</div>',
+    unsafe_allow_html=True,
+)
+
+st.caption(
+    "All displayed values include their engineering units."
+)
 
 
 for reactor_name in reactor_names:
 
     data = reactors[reactor_name]
-
     result = data["results"]
 
     st.subheader(
-        f"📊 {reactor_name} Reactor Performance"
+        f"📊 {reactor_name} — Mixing Performance"
     )
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
 
-    # -----------------------------------------------------
-    # POWER
-    # -----------------------------------------------------
+    # =====================================================
+    # EXTRACT VALUES
+    # =====================================================
 
-    with c1:
+    power_kw = result.get("power_kw")
+    pv = result.get("power_volume")
+    tip_speed = result.get("tip_speed", 0)
+    reynolds = result.get("Re", 0)
 
-        power = result.get(
-            "power_kw"
+    pumping = result.get("pumping_m3_h")
+    turnover = result.get("turnover_time_min")
+
+    froude = result.get("Fr", 0)
+    torque = result.get("torque_nm")
+
+
+    # =====================================================
+    # FORMAT VALUES
+    # =====================================================
+
+    power_text = (
+        f"{power_kw:,.2f}"
+        if power_kw is not None
+        else "N/A"
+    )
+
+    pv_text = (
+        f"{pv:,.1f}"
+        if pv is not None
+        else "N/A"
+    )
+
+    tip_text = (
+        f"{tip_speed:,.2f}"
+    )
+
+    re_text = (
+        f"{reynolds:,.0f}"
+    )
+
+    pumping_text = (
+        f"{pumping:,.2f}"
+        if pumping is not None
+        else "N/A"
+    )
+
+    turnover_text = (
+        f"{turnover:,.2f}"
+        if turnover is not None
+        else "N/A"
+    )
+
+    froude_text = (
+        f"{froude:,.4f}"
+    )
+
+    torque_text = (
+        f"{torque:,.1f}"
+        if torque is not None
+        else "N/A"
+    )
+
+
+    # =====================================================
+    # KPI ROW 1
+    # =====================================================
+
+    k1, k2, k3, k4 = st.columns(4)
+
+
+    with k1:
+
+        st.markdown(
+            f"""
+            <div class="kpi-card">
+
+                <div class="kpi-label">
+                    ⚡ Agitator Power
+                </div>
+
+                <div class="kpi-value">
+                    {power_text}
+                </div>
+
+                <div class="kpi-unit">
+                    kW
+                </div>
+
+                <div class="kpi-note">
+                    Calculated shaft power
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        if power is not None:
 
-            st.metric(
-                "Power",
-                f"{power:.2f} kW",
-            )
+    with k2:
+
+        st.markdown(
+            f"""
+            <div class="kpi-card">
+
+                <div class="kpi-label">
+                    🔋 Power / Volume
+                </div>
+
+                <div class="kpi-value">
+                    {pv_text}
+                </div>
+
+                <div class="kpi-unit">
+                    W/m³
+                </div>
+
+                <div class="kpi-note">
+                    Mixing intensity
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+    with k3:
+
+        st.markdown(
+            f"""
+            <div class="kpi-card">
+
+                <div class="kpi-label">
+                    🌀 Tip Speed
+                </div>
+
+                <div class="kpi-value">
+                    {tip_text}
+                </div>
+
+                <div class="kpi-unit">
+                    m/s
+                </div>
+
+                <div class="kpi-note">
+                    π × Dᵢ × N
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+    with k4:
+
+        if reynolds >= 10000:
+
+            regime = "Turbulent"
+            regime_icon = "🟢"
+
+        elif reynolds >= 10:
+
+            regime = "Transitional"
+            regime_icon = "🟡"
 
         else:
 
-            st.metric(
-                "Power",
-                "N/A",
-            )
+            regime = "Laminar"
+            regime_icon = "🔵"
 
 
-    # -----------------------------------------------------
-    # P/V
-    # -----------------------------------------------------
+        st.markdown(
+            f"""
+            <div class="kpi-card">
 
-    with c2:
+                <div class="kpi-label">
+                    {regime_icon} Reynolds Number
+                </div>
 
-        pv = result.get(
-            "power_volume"
+                <div class="kpi-value">
+                    {re_text}
+                </div>
+
+                <div class="kpi-unit">
+                    [-] dimensionless
+                </div>
+
+                <div class="kpi-note">
+                    {regime} flow regime
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        if pv is not None:
 
-            st.metric(
-                "P/V",
-                f"{pv:.1f} W/m³",
-            )
+    # =====================================================
+    # KPI ROW 2
+    # =====================================================
 
-        else:
-
-            st.metric(
-                "P/V",
-                "N/A",
-            )
+    k1, k2, k3, k4 = st.columns(4)
 
 
-    # -----------------------------------------------------
-    # TIP SPEED
-    # -----------------------------------------------------
+    with k1:
 
-    with c3:
+        st.markdown(
+            f"""
+            <div class="kpi-card">
 
-        tip_speed = result.get(
-            "tip_speed"
+                <div class="kpi-label">
+                    💧 Pumping Capacity
+                </div>
+
+                <div class="kpi-value">
+                    {pumping_text}
+                </div>
+
+                <div class="kpi-unit">
+                    m³/h
+                </div>
+
+                <div class="kpi-note">
+                    Impeller pumping rate
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
+
+
+    with k2:
+
+        st.markdown(
+            f"""
+            <div class="kpi-card">
+
+                <div class="kpi-label">
+                    🔄 Turnover Time
+                </div>
+
+                <div class="kpi-value">
+                    {turnover_text}
+                </div>
+
+                <div class="kpi-unit">
+                    min / turnover
+                </div>
+
+                <div class="kpi-note">
+                    V / Q
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+    with k3:
+
+        st.markdown(
+            f"""
+            <div class="kpi-card">
+
+                <div class="kpi-label">
+                    🌊 Froude Number
+                </div>
+
+                <div class="kpi-value">
+                    {froude_text}
+                </div>
+
+                <div class="kpi-unit">
+                    [-] dimensionless
+                </div>
+
+                <div class="kpi-note">
+                    Inertial / gravity effects
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+    with k4:
+
+        st.markdown(
+            f"""
+            <div class="kpi-card">
+
+                <div class="kpi-label">
+                    ⚙️ Agitator Torque
+                </div>
+
+                <div class="kpi-value">
+                    {torque_text}
+                </div>
+
+                <div class="kpi-unit">
+                    N·m
+                </div>
+
+                <div class="kpi-note">
+                    P / (2πN)
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+    # =====================================================
+    # OPERATING CONDITIONS
+    # =====================================================
+
+    st.markdown(
+        """
+        <div class="operating-card">
+
+            <div class="operating-title">
+                🔧 Operating & Geometry Conditions
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+    o1, o2, o3, o4, o5, o6 = st.columns(6)
+
+
+    with o1:
 
         st.metric(
-            "Tip Speed",
-            f"{tip_speed:.2f} m/s",
+            "Working Volume",
+            f"{data['working_volume']:,.2f} m³",
         )
 
 
-    # -----------------------------------------------------
-    # REYNOLDS
-    # -----------------------------------------------------
-
-    with c4:
-
-        reynolds = result.get(
-            "Re"
-        )
+    with o2:
 
         st.metric(
-            "Re",
-            f"{reynolds:,.0f}",
+            "Tank ID",
+            f"{data['tank_id_m']:,.2f} m",
         )
 
 
-    # -----------------------------------------------------
-    # FLOW
-    # -----------------------------------------------------
+    with o3:
 
-    with c5:
-
-        pumping = result.get(
-            "pumping_m3_h"
+        st.metric(
+            "Liquid Height",
+            f"{data['liquid_height_m']:,.2f} m",
         )
 
-        if pumping is not None:
 
-            st.metric(
-                "Pumping",
-                f"{pumping:.2f} m³/h",
-            )
+    with o4:
 
-        else:
-
-            st.metric(
-                "Pumping",
-                "N/A",
-            )
-
-
-    # -----------------------------------------------------
-    # TURNOVER
-    # -----------------------------------------------------
-
-    with c6:
-
-        turnover = result.get(
-            "turnover_time_min"
+        st.metric(
+            "Impeller Ø",
+            f"{data['impeller_diameter_m']:,.3f} m",
         )
 
-        if turnover is not None:
 
-            st.metric(
-                "Turnover",
-                f"{turnover:.1f} min",
+    with o5:
+
+        st.metric(
+            "Agitator Speed",
+            f"{data['rpm']:,.0f} RPM",
+        )
+
+
+    with o6:
+
+        st.metric(
+            "Fill Level",
+            f"{data['fill_percent']:,.1f} %",
+        )
+
+
+    # =====================================================
+    # DETAILED PARAMETERS
+    # =====================================================
+
+    with st.expander(
+        "📐 View Detailed Engineering Parameters",
+        expanded=False,
+    ):
+
+        d1, d2, d3 = st.columns(3)
+
+
+        with d1:
+
+            st.markdown("#### 🌀 Mixing")
+
+            st.write(
+                f"**Agitator:** {data['agitator_type']}"
             )
 
-        else:
+            st.write(
+                f"**Impellers:** "
+                f"{data['number_impellers']} [-]"
+            )
 
-            st.metric(
-                "Turnover",
-                "N/A",
+            st.write(
+                f"**Impeller / Tank:** "
+                f"{data['Di_over_D']:.3f} [-]"
+            )
+
+            st.write(
+                f"**Liquid Height / Tank ID:** "
+                f"{data['H_over_D']:.2f} [-]"
+            )
+
+            st.write(
+                f"**Baffles:** "
+                f"{data['baffles']} [-]"
+            )
+
+
+        with d2:
+
+            st.markdown("#### ⚡ Power")
+
+            st.write(
+                f"**Power:** "
+                f"{power_text} kW"
+            )
+
+            st.write(
+                f"**Power / Volume:** "
+                f"{pv_text} W/m³"
+            )
+
+            st.write(
+                f"**Torque:** "
+                f"{torque_text} N·m"
+            )
+
+            st.write(
+                f"**Power Number, Np:** "
+                f"{result.get('Np')} [-]"
+            )
+
+
+        with d3:
+
+            st.markdown("#### 💧 Hydrodynamics")
+
+            st.write(
+                f"**Pumping Rate:** "
+                f"{pumping_text} m³/h"
+            )
+
+            st.write(
+                f"**Q/V:** "
+                f"{result.get('qv_1_h', 0):,.2f} h⁻¹"
+            )
+
+            st.write(
+                f"**Turnover Time:** "
+                f"{turnover_text} min"
+            )
+
+            st.write(
+                f"**Flow Number, Nq:** "
+                f"{result.get('Nq')} [-]"
             )
 
 
@@ -784,7 +1310,10 @@ for reactor_name in reactor_names:
 # GEOMETRY SUMMARY
 # =========================================================
 
-st.header("3️⃣ Reactor Geometry Summary")
+st.markdown(
+    '<div class="section-title">3️⃣ Reactor Geometry Summary</div>',
+    unsafe_allow_html=True,
+)
 
 
 geometry_rows = []
@@ -805,7 +1334,7 @@ for reactor_name in reactor_names:
                 3,
             ),
 
-        "Total Vessel Volume [m³]":
+        "Vessel Volume [m³]":
             round(
                 data["vessel_volume_m3"],
                 3,
@@ -829,28 +1358,19 @@ for reactor_name in reactor_names:
                 3,
             ),
 
-        "H/T":
-            round(
-                data["H_over_D"],
-                2,
-            ),
-
-        "Impeller/Tank":
-            round(
-                data["Di_over_D"],
-                3,
-            ),
-
-        "Impeller [m]":
+        "Impeller Ø [m]":
             round(
                 data["impeller_diameter_m"],
                 3,
             ),
 
-        "Impellers":
-            data["number_impellers"],
+        "Impeller/Tank [-]":
+            round(
+                data["Di_over_D"],
+                3,
+            ),
 
-        "RPM":
+        "RPM [min⁻¹]":
             round(
                 data["rpm"],
                 1,
@@ -858,16 +1378,13 @@ for reactor_name in reactor_names:
 
         "Agitator":
             data["agitator_type"],
-
     })
 
 
-geometry_df = pd.DataFrame(
-    geometry_rows
-)
-
 st.dataframe(
-    geometry_df,
+    pd.DataFrame(
+        geometry_rows
+    ),
     use_container_width=True,
     hide_index=True,
 )
@@ -879,19 +1396,21 @@ st.dataframe(
 
 if len(reactor_names) >= 2:
 
-    st.header("4️⃣ Scale-Up Comparison")
+    st.markdown(
+        '<div class="section-title">4️⃣ Scale-Up Comparison</div>',
+        unsafe_allow_html=True,
+    )
+
 
     base_name = reactor_names[0]
-
-    target_names = reactor_names[1:]
-
 
     base_data = reactors[base_name]
 
 
-    for target_name in target_names:
+    for target_name in reactor_names[1:]:
 
         target_data = reactors[target_name]
+
 
         base_result = base_data["results"]
 
@@ -946,7 +1465,6 @@ if len(reactor_names) >= 2:
                 base_result.get(
                     "Nq"
                 ),
-
         }
 
 
@@ -998,23 +1516,28 @@ if len(reactor_names) >= 2:
                 target_result.get(
                     "Nq"
                 ),
-
         }
 
 
-        scaleup = calculate_scaleup(
+        try:
 
-            base=base_for_scaleup,
+            scaleup = calculate_scaleup(
+                base=base_for_scaleup,
+                target=target_for_scaleup,
+                basis=scaleup_basis,
+            )
 
-            target=target_for_scaleup,
+        except Exception as e:
 
-            basis=scaleup_basis,
+            st.error(
+                f"Scale-up calculation error: {e}"
+            )
 
-        )
+            continue
 
 
         st.subheader(
-            f"{base_name} → {target_name}"
+            f"📈 {base_name} → {target_name}"
         )
 
 
@@ -1030,14 +1553,14 @@ if len(reactor_names) >= 2:
             if target_rpm is not None:
 
                 st.metric(
-                    "Calculated Target RPM",
-                    f"{target_rpm:.1f}",
+                    "Calculated Target Speed",
+                    f"{target_rpm:,.1f} RPM",
                 )
 
             else:
 
                 st.metric(
-                    "Calculated Target RPM",
+                    "Calculated Target Speed",
                     "N/A",
                 )
 
@@ -1052,7 +1575,7 @@ if len(reactor_names) >= 2:
 
                 st.metric(
                     "Target Tip Speed",
-                    f"{target_tip:.2f} m/s",
+                    f"{target_tip:,.2f} m/s",
                 )
 
             else:
@@ -1083,7 +1606,10 @@ if len(reactor_names) >= 2:
 # VALIDATION
 # =========================================================
 
-st.header("5️⃣ Engineering Validation")
+st.markdown(
+    '<div class="section-title">5️⃣ Engineering Validation</div>',
+    unsafe_allow_html=True,
+)
 
 
 for reactor_name in reactor_names:
@@ -1094,29 +1620,26 @@ for reactor_name in reactor_names:
 
 
     st.subheader(
-        f"🔍 {reactor_name} Validation"
+        f"🔍 {reactor_name}"
     )
 
 
     if validation["overall"] == "PASS":
 
         st.success(
-            f"Overall Status: PASS | "
-            f"{validation['warnings']} warning(s)"
+            "🟢 Overall Status: PASS"
         )
 
     elif validation["overall"] == "REVIEW":
 
         st.warning(
-            f"Overall Status: REVIEW | "
-            f"{validation['warnings']} warning(s)"
+            "🟡 Overall Status: REVIEW"
         )
 
     else:
 
         st.error(
-            f"Overall Status: FAIL | "
-            f"{validation['failures']} failure(s)"
+            "🔴 Overall Status: FAIL"
         )
 
 
@@ -1132,31 +1655,30 @@ for reactor_name in reactor_names:
 
             "Engineering Check":
                 check["message"],
-
         })
 
 
-    validation_df = pd.DataFrame(
-        validation_rows
-    )
-
-
     st.dataframe(
-        validation_df,
+        pd.DataFrame(
+            validation_rows
+        ),
         use_container_width=True,
         hide_index=True,
     )
 
 
 # =========================================================
-# 3D REACTOR VISUALIZATION
+# 3D VISUALIZATION
 # =========================================================
 
-st.header("6️⃣ 3D Reactor Visualization")
+st.markdown(
+    '<div class="section-title">6️⃣ 3D Reactor Visualization</div>',
+    unsafe_allow_html=True,
+)
 
 
 selected_reactor = st.selectbox(
-    "Select Reactor for 3D Visualization",
+    "Select Reactor",
     reactor_names,
 )
 
@@ -1213,7 +1735,6 @@ try:
         ],
 
         frames_count=36,
-
     )
 
 
@@ -1221,6 +1742,7 @@ try:
         fig,
         use_container_width=True,
     )
+
 
 except Exception as e:
 
@@ -1233,7 +1755,10 @@ except Exception as e:
 # ENGINEERING INSIGHTS
 # =========================================================
 
-st.header("7️⃣ Engineering Insights")
+st.markdown(
+    '<div class="section-title">7️⃣ Engineering Insights</div>',
+    unsafe_allow_html=True,
+)
 
 
 for reactor_name in reactor_names:
@@ -1242,33 +1767,19 @@ for reactor_name in reactor_names:
 
     result = data["results"]
 
-
-    st.subheader(
-        f"💡 {reactor_name}"
-    )
-
-
     insights = []
 
 
-    # -----------------------------------------------------
-    # FILL
-    # -----------------------------------------------------
-
-    fill = data["fill_percent"]
-
-    if fill < 40:
+    if data["fill_percent"] < 40:
 
         insights.append(
-            "⚠️ Low operating fill. "
-            "Review impeller coverage, circulation and headspace."
+            "⚠️ Low operating fill. Review impeller coverage and circulation."
         )
 
-    elif fill > 85:
+    elif data["fill_percent"] > 85:
 
         insights.append(
-            "⚠️ High operating fill. "
-            "Review headspace, vortex and gas disengagement."
+            "⚠️ High operating fill. Review headspace and gas disengagement."
         )
 
     else:
@@ -1278,234 +1789,107 @@ for reactor_name in reactor_names:
         )
 
 
-    # -----------------------------------------------------
-    # BAFFLES
-    # -----------------------------------------------------
-
     if data["baffles"] < 4:
 
         insights.append(
-            "⚠️ Fewer than four baffles selected. "
-            "Check vortexing and rotational flow."
+            "⚠️ Fewer than four baffles selected. Review vortex suppression."
         )
 
     else:
 
         insights.append(
-            "✅ Four or more baffles selected for vortex suppression screening."
+            "✅ Baffle configuration is suitable for preliminary vortex screening."
         )
 
 
-    # -----------------------------------------------------
-    # IMPeller ratio
-    # -----------------------------------------------------
-
-    ratio = data["Di_over_D"]
-
-    if ratio < 0.20:
+    if data["Di_over_D"] < 0.20:
 
         insights.append(
-            "⚠️ Small impeller relative to tank diameter. "
-            "Check bulk circulation."
+            "⚠️ Small impeller/tank ratio. Check bulk circulation."
         )
 
-    elif ratio > 0.60:
+    elif data["Di_over_D"] > 0.60:
 
         insights.append(
-            "⚠️ Large impeller relative to tank diameter. "
-            "Review power, clearance and mechanical loads."
+            "⚠️ Large impeller/tank ratio. Review power and mechanical loads."
         )
 
     else:
 
         insights.append(
-            "✅ Impeller/tank ratio is within a commonly screened range."
+            "✅ Impeller/tank diameter ratio is within the preliminary screening range."
         )
 
 
-    # -----------------------------------------------------
-    # REYNOLDS
-    # -----------------------------------------------------
-
-    Re = result.get(
-        "Re",
-        0,
-    )
-
-
-    if Re < 10:
+    if result.get("Re", 0) < 10:
 
         insights.append(
-            "🔵 Laminar mixing regime detected."
+            "🔵 Laminar mixing regime."
         )
 
-    elif Re < 10000:
+    elif result.get("Re", 0) < 10000:
 
         insights.append(
-            "🟡 Transitional mixing regime detected."
+            "🟡 Transitional mixing regime."
         )
 
     else:
 
         insights.append(
-            "🟢 Turbulent mixing regime detected."
+            "🟢 Turbulent mixing regime."
         )
 
-
-    # -----------------------------------------------------
-    # VISCOSITY
-    # -----------------------------------------------------
 
     if data["viscosity"] > 100:
 
         insights.append(
-            "⚠️ High viscosity system. "
-            "Verify impeller selection and power correlation."
+            "⚠️ High viscosity detected. Validate impeller selection and power correlation."
         )
 
 
-    for insight in insights:
+    with st.expander(
+        f"💡 {reactor_name} Engineering Assessment",
+        expanded=True,
+    ):
 
-        st.write(
-            insight
-        )
+        for insight in insights:
 
-
-# =========================================================
-# STUDY SUMMARY
-# =========================================================
-
-st.header("8️⃣ Study Summary")
-
-
-summary_rows = []
-
-
-for reactor_name in reactor_names:
-
-    data = reactors[reactor_name]
-
-    result = data["results"]
-
-    summary_rows.append({
-
-        "Reactor":
-            reactor_name,
-
-        "Volume [m³]":
-            round(
-                data["working_volume"],
-                3,
-            ),
-
-        "RPM":
-            round(
-                data["rpm"],
-                1,
-            ),
-
-        "Impeller [m]":
-            round(
-                data["impeller_diameter_m"],
-                3,
-            ),
-
-        "Tip Speed [m/s]":
-            round(
-                result.get(
-                    "tip_speed",
-                    0,
-                ),
-                2,
-            ),
-
-        "P/V [W/m³]":
-            round(
-                result.get(
-                    "power_volume",
-                    0,
-                )
-                or 0,
-                2,
-            ),
-
-        "Re":
-            round(
-                result.get(
-                    "Re",
-                    0,
-                ),
-                0,
-            ),
-
-        "Pumping [m³/h]":
-            round(
-                result.get(
-                    "pumping_m3_h",
-                    0,
-                )
-                or 0,
-                2,
-            ),
-
-        "Fill [%]":
-            round(
-                data["fill_percent"],
-                1,
-            ),
-
-        "Validation":
-            data["validation"][
-                "overall"
-            ],
-
-    })
-
-
-summary_df = pd.DataFrame(
-    summary_rows
-)
-
-
-st.dataframe(
-    summary_df,
-    use_container_width=True,
-    hide_index=True,
-)
+            st.write(
+                insight
+            )
 
 
 # =========================================================
-# LIMITATIONS
+# ENGINEERING LIMITATIONS
 # =========================================================
 
 with st.expander(
-    "⚠️ Engineering Limitations / Important Note"
+    "⚠️ Engineering Limitations & Design Note"
 ):
 
     st.warning(
         """
-        This dashboard is intended for engineering screening,
-        comparison and preliminary scale-up assessment.
+        This dashboard is intended for preliminary engineering
+        screening, comparison and reactor scale-up assessment.
 
-        The following should be validated before final equipment
-        design or commercial implementation:
+        Before final equipment specification, validate:
 
-        • Vendor-specific impeller Np/Nq data
-        • Njs / solids suspension correlations
-        • Blend time correlations
-        • Gas dispersion and flooding limits
-        • KLa correlations
-        • Mechanical shaft and seal design
+        • Vendor-specific Np / Nq data
+        • Njs and solids suspension correlations
+        • Blend time
+        • Gas dispersion / flooding
+        • KLa
+        • Shaft torque and mechanical loads
         • Motor sizing and service factor
         • Critical speed
-        • Torque and shaft stress
-        • Reactor pressure/vacuum design
-        • Exact ASME / EN head geometry
-        • Heat-transfer calculations
-        • Process-specific pilot data
+        • Seal design
+        • Pressure / vacuum design
+        • Exact reactor-head geometry
+        • Heat-transfer requirements
+        • Pilot-scale experimental data
 
-        Final design should be based on validated correlations,
-        vendor data and plant/pilot test results.
+        Final equipment design should use validated engineering
+        correlations, vendor data and process-specific test results.
         """
     )
 
@@ -1523,6 +1907,6 @@ st.caption(
 )
 
 st.caption(
-    "Screening tool — engineering judgement and validated "
-    "design methods are required for final equipment specification."
+    "Preliminary engineering screening tool — "
+    "not a substitute for detailed equipment design."
 )
