@@ -1,7 +1,7 @@
 import math
 
 
-def calculate_reactor(data):
+def calculate_results(...)::
 
     rho = data["density"]
     mu = data["viscosity"] / 1000.0
@@ -118,7 +118,46 @@ def calculate_reactor(data):
         "reynolds_number": reynolds,
 
         "power_kw": power_kw,
+def calculate_results(
+    volume_m3,
+    tank_diameter_m,
+    liquid_height_m,
+    density_kg_m3,
+    viscosity_pa_s,
+    surface_tension_n_m,
+    rpm,
+    impeller_diameter_m,
+    number_impellers,
+    agitator
+):
 
+    data = {
+
+        "density":
+            density_kg_m3,
+
+        # Pa.s → mPa.s
+        "viscosity":
+            viscosity_pa_s * 1000.0,
+
+        "rpm":
+            rpm,
+
+        # m → mm
+        "impeller_diameter":
+            impeller_diameter_m * 1000.0,
+
+        "working_volume":
+            volume_m3,
+
+        "agitator_type":
+            agitator,
+
+        "number_impellers":
+            number_impellers,
+    }
+
+    return calculate_reactor(data)
         "power_per_volume": power_per_volume,
 
         "torque_nm": torque,
