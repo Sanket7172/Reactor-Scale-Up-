@@ -1,17 +1,17 @@
 import streamlit as st
 
-from calculations.engine import calculate_results
+from calculations.engine import calculate_reactor
 
 from libraries.agitator_geometry import AGITATORS
 
 from libraries.reactor_geometry import (
-    HEADS,
+    REACTOR_HEADS,
     calculate_total_volume,
-    liquid_height_from_volume
+    liquid_height_from_volume,
 )
 
 from visualization.reactor_3d import (
-    create_reactor_animation
+    create_reactor_animation,
 )
 
 
@@ -23,7 +23,7 @@ st.set_page_config(
     page_title="Reactor Scale-Up Dashboard",
     page_icon="🏭",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
@@ -49,12 +49,12 @@ st.sidebar.header("📋 Project")
 
 project_name = st.sidebar.text_input(
     "Project Name",
-    value="Reactor Scale-Up Study"
+    value="Reactor Scale-Up Study",
 )
 
 engineer = st.sidebar.text_input(
     "Prepared By",
-    value=""
+    value="",
 )
 
 
@@ -71,8 +71,8 @@ study_mode = st.sidebar.selectbox(
         "Lab vs Pilot",
         "Pilot vs Commercial",
         "Lab vs Commercial",
-        "Lab vs Pilot vs Commercial"
-    ]
+        "Lab vs Pilot vs Commercial",
+    ],
 )
 
 
@@ -90,21 +90,21 @@ elif study_mode == "Lab vs Pilot":
 
     selected_reactors = [
         "Lab",
-        "Pilot"
+        "Pilot",
     ]
 
 elif study_mode == "Pilot vs Commercial":
 
     selected_reactors = [
         "Pilot",
-        "Commercial"
+        "Commercial",
     ]
 
 elif study_mode == "Lab vs Commercial":
 
     selected_reactors = [
         "Lab",
-        "Commercial"
+        "Commercial",
     ]
 
 else:
@@ -112,7 +112,7 @@ else:
     selected_reactors = [
         "Lab",
         "Pilot",
-        "Commercial"
+        "Commercial",
     ]
 
 
@@ -134,8 +134,8 @@ reaction_type = st.selectbox(
         "Dissolution",
         "Extraction",
         "Neutralization",
-        "Other"
-    ]
+        "Other",
+    ],
 )
 
 
@@ -154,8 +154,8 @@ scale_up_basis = st.selectbox(
         "Constant N/Njs",
         "Constant Pumping / Volume",
         "Constant KLa",
-        "User Defined"
-    ]
+        "User Defined",
+    ],
 )
 
 
@@ -178,7 +178,7 @@ for reactor_name in selected_reactors:
 
     with st.expander(
         f"{reactor_name} Reactor Configuration",
-        expanded=True
+        expanded=True,
     ):
 
         # =================================================
@@ -197,7 +197,7 @@ for reactor_name in selected_reactors:
                 max_value=5000.0,
                 value=1.0,
                 step=0.1,
-                key=f"{reactor_name}_volume"
+                key=f"{reactor_name}_volume",
             )
 
             tank_id = st.number_input(
@@ -206,7 +206,7 @@ for reactor_name in selected_reactors:
                 max_value=20000.0,
                 value=1200.0,
                 step=10.0,
-                key=f"{reactor_name}_id"
+                key=f"{reactor_name}_id",
             )
 
             straight_height = st.number_input(
@@ -215,21 +215,21 @@ for reactor_name in selected_reactors:
                 max_value=30000.0,
                 value=1500.0,
                 step=10.0,
-                key=f"{reactor_name}_straight_height"
+                key=f"{reactor_name}_straight_height",
             )
 
         with col2:
 
             bottom_type = st.selectbox(
                 f"{reactor_name} Bottom Geometry",
-                list(HEADS.keys()),
-                key=f"{reactor_name}_bottom"
+                list(REACTOR_HEADS.keys()),
+                key=f"{reactor_name}_bottom",
             )
 
             top_type = st.selectbox(
                 f"{reactor_name} Top Geometry",
-                list(HEADS.keys()),
-                key=f"{reactor_name}_top"
+                list(REACTOR_HEADS.keys()),
+                key=f"{reactor_name}_top",
             )
 
         with col3:
@@ -240,7 +240,7 @@ for reactor_name in selected_reactors:
                 max_value=5000.0,
                 value=1000.0,
                 step=10.0,
-                key=f"{reactor_name}_density"
+                key=f"{reactor_name}_density",
             )
 
             viscosity = st.number_input(
@@ -249,7 +249,7 @@ for reactor_name in selected_reactors:
                 max_value=100000.0,
                 value=1.0,
                 step=0.1,
-                key=f"{reactor_name}_viscosity"
+                key=f"{reactor_name}_viscosity",
             )
 
             surface_tension = st.number_input(
@@ -258,7 +258,7 @@ for reactor_name in selected_reactors:
                 max_value=2000.0,
                 value=72.0,
                 step=0.1,
-                key=f"{reactor_name}_surface_tension"
+                key=f"{reactor_name}_surface_tension",
             )
 
         # =================================================
@@ -284,14 +284,10 @@ for reactor_name in selected_reactors:
         # =================================================
 
         vessel_volume = calculate_total_volume(
-
             D=tank_id_m,
-
             straight_height=straight_height_m,
-
             bottom_type=bottom_type,
-
-            top_type=top_type
+            top_type=top_type,
         )
 
         # =================================================
@@ -300,16 +296,11 @@ for reactor_name in selected_reactors:
 
         liquid_height_m, calculated_total_volume = (
             liquid_height_from_volume(
-
                 working_volume=working_volume,
-
                 D=tank_id_m,
-
                 straight_height=straight_height_m,
-
                 bottom_type=bottom_type,
-
-                top_type=top_type
+                top_type=top_type,
             )
         )
 
@@ -318,11 +309,11 @@ for reactor_name in selected_reactors:
         )
 
         fill_percentage = (
-            working_volume /
-            vessel_volume *
-            100.0
+            working_volume
+            / vessel_volume
+            * 100.0
             if vessel_volume > 0
-            else 0
+            else 0.0
         )
 
         # =================================================
@@ -342,16 +333,11 @@ for reactor_name in selected_reactors:
 
             liquid_height_m, calculated_total_volume = (
                 liquid_height_from_volume(
-
                     working_volume=working_volume,
-
                     D=tank_id_m,
-
                     straight_height=straight_height_m,
-
                     bottom_type=bottom_type,
-
-                    top_type=top_type
+                    top_type=top_type,
                 )
             )
 
@@ -359,32 +345,36 @@ for reactor_name in selected_reactors:
                 liquid_height_m * 1000.0
             )
 
+            fill_percentage = 100.0
+
         # =================================================
         # SHOW AUTOMATIC LIQUID LEVEL
         # =================================================
 
-        st.markdown("### 💧 Calculated Operating Liquid Level")
+        st.markdown(
+            "### 💧 Calculated Operating Liquid Level"
+        )
 
         g1, g2, g3, g4 = st.columns(4)
 
         g1.metric(
             "Vessel Volume",
-            f"{vessel_volume:.2f} m³"
+            f"{vessel_volume:.2f} m³",
         )
 
         g2.metric(
             "Operating Volume",
-            f"{working_volume:.2f} m³"
+            f"{working_volume:.2f} m³",
         )
 
         g3.metric(
             "Liquid Level",
-            f"{liquid_height_mm:.0f} mm"
+            f"{liquid_height_mm:.0f} mm",
         )
 
         g4.metric(
             "Fill %",
-            f"{fill_percentage:.1f}%"
+            f"{fill_percentage:.1f}%",
         )
 
         st.info(
@@ -402,7 +392,7 @@ for reactor_name in selected_reactors:
         agitator_type = st.selectbox(
             "Agitator Type",
             list(AGITATORS.keys()),
-            key=f"{reactor_name}_agitator"
+            key=f"{reactor_name}_agitator",
         )
 
         agitator_info = AGITATORS[
@@ -420,10 +410,10 @@ for reactor_name in selected_reactors:
         with c1:
 
             default_impeller = (
-                tank_id *
-                agitator_info.get(
+                tank_id
+                * agitator_info.get(
                     "default_diameter_ratio",
-                    0.35
+                    0.35,
                 )
             )
 
@@ -434,11 +424,11 @@ for reactor_name in selected_reactors:
                 value=float(
                     round(
                         default_impeller,
-                        1
+                        1,
                     )
                 ),
                 step=10.0,
-                key=f"{reactor_name}_impeller_d"
+                key=f"{reactor_name}_impeller_d",
             )
 
         with c2:
@@ -449,7 +439,7 @@ for reactor_name in selected_reactors:
                 max_value=10,
                 value=1,
                 step=1,
-                key=f"{reactor_name}_impellers"
+                key=f"{reactor_name}_impellers",
             )
 
         with c3:
@@ -460,7 +450,7 @@ for reactor_name in selected_reactors:
                 max_value=12,
                 value=4,
                 step=1,
-                key=f"{reactor_name}_baffles"
+                key=f"{reactor_name}_baffles",
             )
 
         with c4:
@@ -471,7 +461,7 @@ for reactor_name in selected_reactors:
                 max_value=1000.0,
                 value=100.0,
                 step=1.0,
-                key=f"{reactor_name}_rpm"
+                key=f"{reactor_name}_rpm",
             )
 
         # =================================================
@@ -479,37 +469,24 @@ for reactor_name in selected_reactors:
         # =================================================
 
         impeller_diameter_m = (
-            impeller_diameter /
-            1000.0
+            impeller_diameter / 1000.0
         )
 
         # =================================================
         # ENGINEERING CALCULATION
         # =================================================
 
-        reactor_results = calculate_results(
-
+        reactor_results = calculate_reactor(
             volume_m3=working_volume,
-
             tank_diameter_m=tank_id_m,
-
             liquid_height_m=liquid_height_m,
-
             density_kg_m3=liquid_density,
-
             viscosity_pa_s=viscosity_pa_s,
-
             surface_tension_n_m=surface_tension_n_m,
-
             rpm=rpm,
-
             impeller_diameter_m=impeller_diameter_m,
-
-            number_impellers=int(
-                number_impellers
-            ),
-
-            agitator=agitator_type
+            number_impellers=int(number_impellers),
+            agitator=agitator_type,
         )
 
         # =================================================
@@ -518,7 +495,7 @@ for reactor_name in selected_reactors:
 
         froude = reactor_results.get(
             "Fr",
-            0.0
+            0.0,
         )
 
         if baffles == 0:
@@ -538,33 +515,22 @@ for reactor_name in selected_reactors:
             baffle_factor = 0.15
 
         vortex_depth_m = (
-
-            0.08 *
-
-            impeller_diameter_m *
-
-            froude ** 0.5 *
-
-            baffle_factor
-
+            0.08
+            * impeller_diameter_m
+            * froude ** 0.5
+            * baffle_factor
         )
 
         vortex_depth_m = min(
-
             vortex_depth_m,
-
-            0.35 *
-            liquid_height_m
+            0.35 * liquid_height_m,
         )
 
         vortex_percent = (
-
-            vortex_depth_m /
-            liquid_height_m *
-            100.0
-
+            vortex_depth_m
+            / liquid_height_m
+            * 100.0
             if liquid_height_m > 0
-
             else 0.0
         )
 
@@ -608,69 +574,53 @@ for reactor_name in selected_reactors:
 
             "straight_height": straight_height,
 
-            "straight_height_m":
-                straight_height_m,
+            "straight_height_m": straight_height_m,
 
             "bottom_type": bottom_type,
 
             "top_type": top_type,
 
-            "vessel_volume":
-                vessel_volume,
+            "vessel_volume": vessel_volume,
 
-            "liquid_height":
-                liquid_height_mm,
+            "liquid_height": liquid_height_mm,
 
-            "liquid_height_m":
-                liquid_height_m,
+            "liquid_height_m": liquid_height_m,
 
-            "fill_percentage":
-                fill_percentage,
+            "fill_percentage": fill_percentage,
 
-            "density":
-                liquid_density,
+            "density": liquid_density,
 
-            "viscosity":
-                viscosity,
+            "viscosity": viscosity,
 
-            "viscosity_pa_s":
-                viscosity_pa_s,
+            "viscosity_pa_s": viscosity_pa_s,
 
-            "surface_tension":
-                surface_tension,
+            "surface_tension": surface_tension,
 
-            "rpm":
-                rpm,
+            "surface_tension_n_m": surface_tension_n_m,
 
-            "agitator_type":
-                agitator_type,
+            "rpm": rpm,
 
-            "impeller_diameter":
-                impeller_diameter,
+            "agitator_type": agitator_type,
 
-            "impeller_diameter_m":
-                impeller_diameter_m,
+            "impeller_diameter": impeller_diameter,
 
-            "number_impellers":
-                int(number_impellers),
+            "impeller_diameter_m": impeller_diameter_m,
 
-            "baffles":
-                int(baffles),
+            "number_impellers": int(
+                number_impellers
+            ),
 
-            "reaction_type":
-                reaction_type,
+            "baffles": int(baffles),
 
-            "scale_up_basis":
-                scale_up_basis,
+            "reaction_type": reaction_type,
 
-            "vortex_depth":
-                vortex_depth_m,
+            "scale_up_basis": scale_up_basis,
 
-            "vortex_percent":
-                vortex_percent,
+            "vortex_depth": vortex_depth_m,
 
-            "vortex_status":
-                vortex_status
+            "vortex_percent": vortex_percent,
+
+            "vortex_status": vortex_status,
         }
 
         reactor_data.update(
@@ -686,7 +636,9 @@ for reactor_name in selected_reactors:
 # ENGINEERING RESULTS
 # =========================================================
 
-st.header("3. 📊 Engineering Results")
+st.header(
+    "3. 📊 Engineering Results"
+)
 
 
 for name, data in reactors.items():
@@ -705,7 +657,7 @@ for name, data in reactors.items():
 
         st.metric(
             "Liquid Level",
-            f"{data['liquid_height']:.0f} mm"
+            f"{data['liquid_height']:.0f} mm",
         )
 
     # -----------------------------------------------------
@@ -716,7 +668,7 @@ for name, data in reactors.items():
 
         st.metric(
             "Tip Speed",
-            f"{data['tip_speed']:.2f} m/s"
+            f"{data['tip_speed']:.2f} m/s",
         )
 
     # -----------------------------------------------------
@@ -733,14 +685,14 @@ for name, data in reactors.items():
 
             st.metric(
                 "Power",
-                f"{power:.2f} kW"
+                f"{power:.2f} kW",
             )
 
         else:
 
             st.metric(
                 "Power",
-                "N/A"
+                "N/A",
             )
 
     # -----------------------------------------------------
@@ -757,14 +709,14 @@ for name, data in reactors.items():
 
             st.metric(
                 "P/V",
-                f"{power_volume:.1f} W/m³"
+                f"{power_volume:.1f} W/m³",
             )
 
         else:
 
             st.metric(
                 "P/V",
-                "N/A"
+                "N/A",
             )
 
     # -----------------------------------------------------
@@ -775,7 +727,7 @@ for name, data in reactors.items():
 
         st.metric(
             "Reynolds Number",
-            f"{data['Re']:.2e}"
+            f"{data['Re']:.2e}",
         )
 
     # =====================================================
@@ -794,14 +746,14 @@ for name, data in reactors.items():
 
             st.metric(
                 "Pumping Capacity",
-                f"{pumping:.1f} m³/h"
+                f"{pumping:.1f} m³/h",
             )
 
         else:
 
             st.metric(
                 "Pumping Capacity",
-                "N/A"
+                "N/A",
             )
 
     with c2:
@@ -814,35 +766,35 @@ for name, data in reactors.items():
 
             st.metric(
                 "Turnover Time",
-                f"{turnover:.1f} min"
+                f"{turnover:.1f} min",
             )
 
         else:
 
             st.metric(
                 "Turnover Time",
-                "N/A"
+                "N/A",
             )
 
     with c3:
 
         st.metric(
             "Froude Number",
-            f"{data['Fr']:.4f}"
+            f"{data['Fr']:.4f}",
         )
 
     with c4:
 
         st.metric(
             "Vortex Depth",
-            f"{data['vortex_depth']:.3f} m"
+            f"{data['vortex_depth']:.3f} m",
         )
 
     with c5:
 
         st.metric(
             "Vortex",
-            data["vortex_status"]
+            data["vortex_status"],
         )
 
     # =====================================================
@@ -867,7 +819,6 @@ st.header(
     "4. 🏭 3D Reactor & Animated Mixing"
 )
 
-
 st.info(
     "The 3D model uses the selected reactor diameter, "
     "straight-side height, bottom head, top head and "
@@ -888,7 +839,6 @@ for name, data in reactors.items():
     # =====================================================
 
     fig = create_reactor_animation(
-
         D=data["tank_id_m"],
 
         straight_height=data[
@@ -931,12 +881,12 @@ for name, data in reactors.items():
             "vortex_depth"
         ],
 
-        frames_count=36
+        frames_count=36,
     )
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.caption(
