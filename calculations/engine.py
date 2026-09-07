@@ -4,10 +4,22 @@ from libraries.agitator_geometry import AGITATORS
 
 
 # =========================================================
-# CONSTANTS
+# CONSTANT
 # =========================================================
 
-G = 9.81
+G = 9.81  # m/s²
+
+
+# =========================================================
+# HELPER
+# =========================================================
+
+def _number(value, name):
+    """Convert input to float and provide a clear error."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be a numeric value.")
 
 
 # =========================================================
@@ -28,43 +40,67 @@ def calculate_reactor(
     impeller_clearance_m=None,
 ):
     """
-    Calculate preliminary reactor mixing and agitation parameters.
+    Reactor mixing and agitation calculations.
 
-    Parameters
-    ----------
-    volume_m3 : float
-        Working liquid/slurry volume, m3
+    INPUT UNITS
+    -----------
+    volume_m3            : m³
+    tank_diameter_m     : m
+    liquid_height_m     : m
+    density_kg_m3       : kg/m³
+    viscosity_pa_s      : Pa·s
+    surface_tension_n_m : N/m
+    rpm                  : rev/min
+    impeller_diameter_m : m
+    number_impellers    : -
+    agitator             : key from AGITATORS
+    impeller_clearance_m: m
 
-    tank_diameter_m : float
-        Reactor internal diameter, m
-
-    liquid_height_m : float
-        Operating liquid height, m
-
-    density_kg_m3 : float
-        Process density, kg/m3
-
-    viscosity_pa_s : float
-        Dynamic viscosity, Pa.s
-
-    surface_tension_n_m : float
-        Surface tension, N/m
-
-    rpm : float
-        Agitator speed, RPM
-
-    impeller_diameter_m : float
-        Impeller diameter, m
-
-    number_impellers : int
-        Number of impellers
-
-    agitator : str
-        Agitator name from AGITATORS library
-
-    impeller_clearance_m : float, optional
-        Bottom clearance of impeller, m
+    OUTPUT
+    ------
+    Power                 : W / kW
+    Power density P/V     : W/m³ / kW/m³
+    Tip speed             : m/s
+    Reynolds number       : -
+    Froude number         : -
+    Weber number          : -
+    Pumping               : m³/h
+    Q/V                   : 1/h
+    Turnover time         : min
+    Torque                : N·m
     """
+
+    # =====================================================
+    # INPUT CONVERSION
+    # =====================================================
+
+    volume_m3 = _number(volume_m3, "Working volume")
+    tank_diameter_m = _number(tank_diameter_m, "Tank diameter")
+    liquid_height_m = _number(liquid_height_m, "Liquid height")
+    density_kg_m3 = _number(density_kg_m3, "Density")
+    viscosity_pa_s = _number(viscosity_pa_s, "Viscosity")
+    surface_tension_n_m = _number(
+        surface_tension_n_m,
+        "Surface tension"
+    )
+    rpm = _number(rpm, "RPM")
+    impeller_diameter_m = _number(
+        impeller_diameter_m,
+        "Impeller diameter"
+    )
+
+    try:
+        number_impellers = int(number_impellers)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "Number of impellers must be an integer."
+        )
+
+    if impeller_clearance_m is not None:
+        impeller_clearance_m = _number(
+            impeller_clearance_m,
+            "Impeller clearance"
+        )
 
     # =====================================================
     # INPUT VALIDATION
@@ -85,6 +121,11 @@ def calculate_reactor(
     if viscosity_pa_s <= 0:
         raise ValueError("Viscosity must be greater than zero.")
 
+    if surface_tension_n_m <= 0:
+        raise ValueError(
+            "Surface tension must be greater than zero."
+        )
+
     if rpm <= 0:
         raise ValueError("RPM must be greater than zero.")
 
@@ -93,80 +134,119 @@ def calculate_reactor(
             "Impeller diameter must be greater than zero."
         )
 
-    if number_impellers <= 0:
+    if number_impellers < 1:
         raise ValueError(
             "Number of impellers must be at least 1."
         )
 
-    if agitator not in AGITATORS:
-        raise ValueError(
-            f"Agitator '{agitator}' is not available in the agitator library."
-        )
-
-    # =====================================================
-    # AGITATOR DATA
-    # =====================================================
-
-    agitator_data = AGITATORS.get(
-        agitator,
-        {}
-    )
-
-    np_num = agitator_data.get("np")
-    nq = agitator_data.get("nq")
-
-    # =====================================================
-    # BASIC VARIABLES
-    # =====================================================
-
-    rho = float(density_kg_m3)
-    mu = float(viscosity_pa_s)
-    D = float(impeller_diameter_m)
-    T = float(tank_diameter_m)
-    N_rpm = float(rpm)
-    nimp = int(number_impellers)
-
-    # Convert RPM to revolutions/sec
-    N = N_rpm / 60.0
-
-    # =====================================================
-    # GEOMETRY RATIOS
-    # =====================================================
-
-    D_T = D / T if T > 0 else 0.0
-
-    H_T = (
-        liquid_height_m / T
-        if T > 0
-        else 0.0
-    )
-
-    clearance_T = None
-
     if impeller_clearance_m is not None:
-
         if impeller_clearance_m < 0:
             raise ValueError(
                 "Impeller clearance cannot be negative."
             )
 
-        clearance_T = (
-            impeller_clearance_m / T
-            if T > 0
-            else 0.0
+    # =====================================================
+    # AGITATOR LIBRARY
+    # =====================================================
+
+    if agitator not in AGITATORS:
+        raise ValueError(
+            f"Agitator '{agitator}' not found in AGITATORS."
         )
+
+    agitator_data = AGITATORS[agitator]
+
+    if not isinstance(agitator_data, dict):
+        raise ValueError(
+            f"Invalid data for agitator '{agitator}'."
+        )
+
+    # Support both np/Np and nq/Nq naming
+    np_value = agitator_data.get("np")
+
+    if np_value is None:
+        np_value = agitator_data.get("Np")
+
+    nq_value = agitator_data.get("nq")
+
+    if nq_value is None:
+        nq_value = agitator_data.get("Nq")
+
+    # Np is required for power calculation
+    if np_value is None:
+        raise ValueError(
+            f"Np is missing for agitator '{agitator}'."
+        )
+
+    np_value = _number(
+        np_value,
+        f"Np for {agitator}"
+    )
+
+    if np_value <= 0:
+        raise ValueError(
+            f"Np must be greater than zero for '{agitator}'."
+        )
+
+    # Nq is optional
+    if nq_value is not None:
+        nq_value = _number(
+            nq_value,
+            f"Nq for {agitator}"
+        )
+
+        if nq_value <= 0:
+            raise ValueError(
+                f"Nq must be greater than zero for '{agitator}'."
+            )
+
+    # =====================================================
+    # BASIC VARIABLES
+    # =====================================================
+
+    rho = density_kg_m3
+    mu = viscosity_pa_s
+    sigma = surface_tension_n_m
+
+    T = tank_diameter_m
+    D = impeller_diameter_m
+
+    # =====================================================
+    # RPM TO REV/S
+    # =====================================================
+
+    N = rpm / 60.0
+
+    # =====================================================
+    # GEOMETRY RATIOS
+    # =====================================================
+
+    D_T = D / T
+
+    H_T = liquid_height_m / T
+
+    C_T = None
+
+    if impeller_clearance_m is not None:
+        C_T = impeller_clearance_m / T
 
     # =====================================================
     # TIP SPEED
+    #
+    # u = πDN
+    #
+    # Result = m/s
     # =====================================================
 
-    tip_speed = math.pi * D * N
+    tip_speed_m_s = math.pi * D * N
 
     # =====================================================
     # REYNOLDS NUMBER
+    #
+    # Re = ρND² / μ
     # =====================================================
 
-    reynolds = (
+    reynolds_number = (
         rho
         * N
         * D**2
@@ -175,111 +255,235 @@ def calculate_reactor(
 
     # =====================================================
     # FROUDE NUMBER
+    #
+    # Fr = N²D / g
     # =====================================================
 
-    froude = (
+    froude_number = (
         N**2
         * D
         / G
     )
 
     # =====================================================
-    # POWER
+    # WEBER NUMBER
+    #
+    # We = ρN²D³ / σ
     # =====================================================
 
-    power_w = None
-    power_kw = None
-    power_volume = None
-    torque_nm = None
+    weber_number = (
+        rho
+        * N**2
+        * D**3
+        / sigma
+    )
 
-    if np_num is not None:
+    # =====================================================
+    # POWER
+    #
+    # P = Np × ρ × N³ × D⁵
+    #
+    # P = W
+    # =====================================================
 
-        power_w = (
-            np_num
-            * rho
-            * N**3
-            * D**5
-            * nimp
-        )
+    power_single_w = (
+        np_value
+        * rho
+        * N**3
+        * D**5
+    )
 
-        power_kw = power_w / 1000.0
+    # Preliminary multi-impeller estimate
+    power_total_w = (
+        power_single_w
+        * number_impellers
+    )
 
-        if volume_m3 > 0:
-            power_volume = (
-                power_w
-                / volume_m3
-            )
+    # =====================================================
+    # POWER → kW
+    # =====================================================
 
-        if N > 0:
-            torque_nm = (
-                power_w
-                / (2.0 * math.pi * N)
-            )
+    power_single_kw = (
+        power_single_w / 1000.0
+    )
+
+    power_total_kw = (
+        power_total_w / 1000.0
+    )
+
+    # =====================================================
+    # POWER / VOLUME
+    #
+    # W/m³
+    # =====================================================
+
+    power_density_w_m3 = (
+        power_total_w
+        / volume_m3
+    )
+
+    # =====================================================
+    # POWER / VOLUME
+    #
+    # kW/m³
+    #
+    # 1 kW = 1000 W
+    # =====================================================
+
+    power_density_kw_m3 = (
+        power_density_w_m3 / 1000.0
+    )
+
+    # =====================================================
+    # TORQUE
+    #
+    # T = P / (2πN)
+    #
+    # P = W
+    # N = rev/s
+    #
+    # Result = N·m
+    # =====================================================
+
+    torque_nm = (
+        power_total_w
+        / (2.0 * math.pi * N)
+    )
 
     # =====================================================
     # PUMPING CAPACITY
+    #
+    # Q = Nq × N × D³
+    #
+    # Result = m³/s
     # =====================================================
 
-    pumping_m3_s = None
-    pumping_m3_h = None
-    qv_1_h = None
-    turnover_time_min = None
+    pumping_single_m3_s = None
+    pumping_total_m3_s = None
 
-    if nq is not None:
+    if nq_value is not None:
 
-        pumping_m3_s = (
-            nq
+        pumping_single_m3_s = (
+            nq_value
             * N
             * D**3
-            * nimp
         )
 
-        pumping_m3_h = (
-            pumping_m3_s
+        pumping_total_m3_s = (
+            pumping_single_m3_s
+            * number_impellers
+        )
+
+    # =====================================================
+    # PUMPING → m³/h
+    # =====================================================
+
+    pumping_single_m3_h = None
+    pumping_total_m3_h = None
+
+    if pumping_single_m3_s is not None:
+
+        pumping_single_m3_h = (
+            pumping_single_m3_s
             * 3600.0
         )
 
-        if volume_m3 > 0:
+        pumping_total_m3_h = (
+            pumping_total_m3_s
+            * 3600.0
+        )
 
-            qv_1_h = (
-                pumping_m3_h
-                / volume_m3
-            )
+    # =====================================================
+    # Q/V
+    #
+    # Q/V = (m³/h) / m³
+    #
+    # Result = 1/h
+    # =====================================================
 
-            if qv_1_h > 0:
+    qv_1_h = None
 
-                turnover_time_min = (
-                    60.0
-                    / qv_1_h
-                )
+    if pumping_total_m3_h is not None:
+
+        qv_1_h = (
+            pumping_total_m3_h
+            / volume_m3
+        )
+
+    # =====================================================
+    # TURNOVER TIME
+    #
+    # Turnover time = V/Q
+    #
+    # Result = min
+    # =====================================================
+
+    turnover_time_min = None
+
+    if qv_1_h is not None and qv_1_h > 0:
+
+        turnover_time_min = (
+            60.0 / qv_1_h
+        )
 
     # =====================================================
     # MIXING REGIME
     # =====================================================
 
-    if reynolds < 10:
+    if reynolds_number < 10:
 
-        regime = "Laminar"
+        mixing_regime = "Laminar"
 
-    elif reynolds < 10000:
+    elif reynolds_number < 10000:
 
-        regime = "Transitional"
+        mixing_regime = "Transitional"
 
     else:
 
-        regime = "Turbulent"
+        mixing_regime = "Turbulent"
 
     # =====================================================
-    # VOLUME SCALE-UP RELATED VALUES
+    # ENGINEERING WARNINGS
     # =====================================================
 
-    specific_power_kw_m3 = None
+    engineering_warnings = []
 
-    if power_kw is not None and volume_m3 > 0:
+    if D_T < 0.20:
+        engineering_warnings.append(
+            "D/T is low. Verify impeller diameter and circulation."
+        )
 
-        specific_power_kw_m3 = (
-            power_kw
-            / volume_m3
+    if D_T > 0.70:
+        engineering_warnings.append(
+            "D/T is high. Verify power and mechanical suitability."
+        )
+
+    if H_T < 0.50:
+        engineering_warnings.append(
+            "H/T is low. Verify impeller submergence."
+        )
+
+    if H_T > 2.50:
+        engineering_warnings.append(
+            "H/T is high. Check need for multiple impellers."
+        )
+
+    if C_T is not None and C_T < 0.15:
+        engineering_warnings.append(
+            "C/T is low. Verify bottom clearance."
+        )
+
+    if reynolds_number < 10:
+        engineering_warnings.append(
+            "Laminar regime detected. Verify applicability "
+            "of the selected power correlation."
+        )
+
+    if number_impellers > 1:
+        engineering_warnings.append(
+            "Multiple-impeller power and pumping are estimated "
+            "by additive scaling. Detailed hydrodynamic analysis "
+            "is recommended for final design."
         )
 
     # =====================================================
@@ -288,93 +492,148 @@ def calculate_reactor(
 
     return {
 
-        # -------------------------------------------------
-        # BASIC MIXING PARAMETERS
-        # -------------------------------------------------
+        # =================================================
+        # BASIC
+        # =================================================
 
-        "tip_speed": tip_speed,
+        "volume_m3": volume_m3,
 
-        "Re": reynolds,
+        "tank_diameter_m": tank_diameter_m,
 
-        "reynolds_number": reynolds,
+        "liquid_height_m": liquid_height_m,
 
-        "Fr": froude,
+        "rpm": rpm,
 
-        "froude_number": froude,
+        "rotational_speed_rps": N,
 
-        # -------------------------------------------------
-        # AGITATOR DATA
-        # -------------------------------------------------
-
-        "Np": np_num,
-
-        "Nq": nq,
+        # =================================================
+        # AGITATOR
+        # =================================================
 
         "agitator": agitator,
 
-        "number_impellers": nimp,
+        "Np": np_value,
+
+        "Nq": nq_value,
+
+        "number_impellers": number_impellers,
 
         "impeller_diameter_m": D,
 
-        # -------------------------------------------------
-        # POWER
-        # -------------------------------------------------
-
-        "power_w": power_w,
-
-        "power_kw": power_kw,
-
-        "power_volume": power_volume,
-
-        "power_per_volume": power_volume,
-
-        "specific_power_kw_m3": specific_power_kw_m3,
-
-        # -------------------------------------------------
-        # TORQUE
-        # -------------------------------------------------
-
-        "torque_nm": torque_nm,
-
-        # -------------------------------------------------
-        # PUMPING
-        # -------------------------------------------------
-
-        "pumping_m3_s": pumping_m3_s,
-
-        "pumping_m3_h": pumping_m3_h,
-
-        "qv_1_h": qv_1_h,
-
-        # Compatibility with scale-up module
-        "pumping_per_volume": qv_1_h,
-
-        "turnover_time_min": turnover_time_min,
-
-        # -------------------------------------------------
+        # =================================================
         # GEOMETRY
-        # -------------------------------------------------
+        # =================================================
 
         "D_T": D_T,
 
+        "D_T_ratio": D_T,
+
         "H_T": H_T,
 
-        "clearance_T": clearance_T,
+        "H_T_ratio": H_T,
 
-        # -------------------------------------------------
+        "C_T": C_T,
+
+        "clearance_T": C_T,
+
+        # =================================================
+        # HYDRODYNAMIC PARAMETERS
+        # =================================================
+
+        "tip_speed": tip_speed_m_s,
+
+        "tip_speed_m_s": tip_speed_m_s,
+
+        "Re": reynolds_number,
+
+        "reynolds_number": reynolds_number,
+
+        "Fr": froude_number,
+
+        "froude_number": froude_number,
+
+        "We": weber_number,
+
+        "weber_number": weber_number,
+
+        # =================================================
+        # POWER
+        # =================================================
+
+        "power_single_w": power_single_w,
+
+        "power_single_kw": power_single_kw,
+
+        "power_w": power_total_w,
+
+        "power_kw": power_total_kw,
+
+        # =================================================
+        # P/V
+        # =================================================
+
+        "power_density_w_m3": power_density_w_m3,
+
+        "power_density_kw_m3": power_density_kw_m3,
+
+        "specific_power_kw_m3": power_density_kw_m3,
+
+        # Compatibility aliases
+        "power_volume": power_density_w_m3,
+
+        "power_per_volume": power_density_w_m3,
+
+        # =================================================
+        # TORQUE
+        # =================================================
+
+        "torque_nm": torque_nm,
+
+        # =================================================
+        # PUMPING
+        # =================================================
+
+        "pumping_single_m3_s": pumping_single_m3_s,
+
+        "pumping_single_m3_h": pumping_single_m3_h,
+
+        "pumping_m3_s": pumping_total_m3_s,
+
+        "pumping_m3_h": pumping_total_m3_h,
+
+        # =================================================
+        # Q/V
+        # =================================================
+
+        "qv_1_h": qv_1_h,
+
+        "pumping_per_volume": qv_1_h,
+
+        # =================================================
+        # TURNOVER
+        # =================================================
+
+        "turnover_time_min": turnover_time_min,
+
+        # =================================================
         # MIXING REGIME
-        # -------------------------------------------------
+        # =================================================
 
-        "mixing_regime": regime,
+        "mixing_regime": mixing_regime,
 
-        # -------------------------------------------------
+        # =================================================
         # PROCESS PROPERTIES
-        # -------------------------------------------------
-
-        "viscosity_pa_s": mu,
+        # =================================================
 
         "density_kg_m3": rho,
 
-        "surface_tension_n_m": surface_tension_n_m,
+        "viscosity_pa_s": mu,
 
+        "surface_tension_n_m": sigma,
+
+        # =================================================
+        # WARNINGS
+        # =================================================
+
+        "engineering_warnings": engineering_warnings,
     }
