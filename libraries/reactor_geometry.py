@@ -40,12 +40,11 @@ REACTOR_HEADS = {
 }
 
 
-# Backward compatibility
 HEADS = REACTOR_HEADS
 
 
 # =========================================================
-# BASIC GEOMETRY
+# HEAD DEPTH
 # =========================================================
 
 def head_depth(D, head_type):
@@ -55,20 +54,25 @@ def head_depth(D, head_type):
         {}
     )
 
-    ratio = data.get(
-        "depth_ratio",
-        0.0
+    return (
+        D *
+        data.get(
+            "depth_ratio",
+            0.0
+        )
     )
 
-    return D * ratio
 
+# =========================================================
+# CYLINDRICAL VOLUME
+# =========================================================
 
 def cylindrical_volume(D, H):
 
     return (
-        math.pi /
+        math.pi *
+        D**2 /
         4.0 *
-        D**2 *
         H
     )
 
@@ -79,56 +83,75 @@ def cylindrical_volume(D, H):
 
 def head_volume(D, head_type):
 
+    data = REACTOR_HEADS.get(
+        head_type
+    )
+
+    if data is None:
+        raise ValueError(
+            f"Unknown reactor head: {head_type}"
+        )
+
+    kind = data["type"]
+
     h = head_depth(
         D,
         head_type
     )
 
-    if h <= 0:
-
-        return 0.0
-
     area = (
-        math.pi /
-        4.0 *
-        D**2
+        math.pi *
+        D**2 /
+        4.0
     )
 
-    head_kind = REACTOR_HEADS[
-        head_type
-    ]["type"]
+    if kind == "flat":
+        return 0.0
 
-    if head_kind == "hemispherical":
+    if kind == "hemispherical":
+
+        R = D / 2.0
 
         return (
             2.0 /
             3.0 *
             math.pi *
-            (D / 2.0)**3
+            R**3
         )
 
-    elif head_kind == "conical":
+    if kind == "conical":
 
         return (
-            1.0 /
-            3.0 *
+            area *
+            h /
+            3.0
+        )
+
+    if kind == "ellipsoidal":
+
+        # Ellipsoidal approximation
+        # V = pi/6 * D² * h
+
+        return (
+            math.pi /
+            6.0 *
+            D**2 *
+            h
+        )
+
+    if kind == "torispherical":
+
+        # Preliminary engineering approximation.
+        # Actual ASME geometry should be used for
+        # final vessel fabrication design.
+
+        return (
+            0.85 *
             area *
             h
         )
 
-    elif head_kind == "flat":
-
-        return 0.0
-
-    else:
-
-        # Screening approximation for
-        # ellipsoidal / torispherical heads
-        return (
-            0.65 *
-            area *
-            h
-        )
+    return 0.0
 
 
 # =========================================================
@@ -142,30 +165,26 @@ def calculate_total_volume(
     top_type,
 ):
 
-    cylinder = cylindrical_volume(
-        D,
-        straight_height
-    )
-
-    bottom = head_volume(
-        D,
-        bottom_type
-    )
-
-    top = head_volume(
-        D,
-        top_type
-    )
-
     return (
-        cylinder +
-        bottom +
-        top
+        cylindrical_volume(
+            D,
+            straight_height
+        )
+        +
+        head_volume(
+            D,
+            bottom_type
+        )
+        +
+        head_volume(
+            D,
+            top_type
+        )
     )
 
 
 # =========================================================
-# 2D VESSEL PROFILE
+# PROFILE
 # =========================================================
 
 def profile(
@@ -173,7 +192,7 @@ def profile(
     straight_height,
     bottom_type,
     top_type,
-    n_points=200,
+    n_points=300,
 ):
 
     bottom_h = head_depth(
@@ -186,24 +205,34 @@ def profile(
         top_type
     )
 
+    # -----------------------------------------------------
     # Bottom
+    # -----------------------------------------------------
+
     if bottom_h > 0:
 
         zb = np.linspace(
-            0,
+            0.0,
             bottom_h,
-            max(20, n_points // 5)
+            max(
+                30,
+                n_points // 4
+            )
         )
 
-        ratio = zb / bottom_h
+        ratio = (
+            zb /
+            bottom_h
+        )
 
         rb = (
-            D / 2.0 *
+            D /
+            2.0 *
             np.sqrt(
                 np.clip(
                     ratio,
-                    0,
-                    1
+                    0.0,
+                    1.0
                 )
             )
         )
@@ -212,13 +241,21 @@ def profile(
 
         zb = np.array([0.0])
 
-        rb = np.array([D / 2.0])
+        rb = np.array([
+            D / 2.0
+        ])
 
-    # Straight shell
+    # -----------------------------------------------------
+    # Straight side
+    # -----------------------------------------------------
+
     zs = np.linspace(
         bottom_h,
         bottom_h + straight_height,
-        max(30, n_points // 2)
+        max(
+            50,
+            n_points // 2
+        )
     )
 
     rs = np.full_like(
@@ -226,30 +263,39 @@ def profile(
         D / 2.0
     )
 
-    # Top head
+    # -----------------------------------------------------
+    # Top
+    # -----------------------------------------------------
+
+    top_start = (
+        bottom_h +
+        straight_height
+    )
+
     if top_h > 0:
 
         zt = np.linspace(
-            bottom_h + straight_height,
-            bottom_h + straight_height + top_h,
-            max(20, n_points // 5)
+            top_start,
+            top_start + top_h,
+            max(
+                30,
+                n_points // 4
+            )
         )
 
         ratio = (
             zt -
-            (
-                bottom_h +
-                straight_height
-            )
+            top_start
         ) / top_h
 
         rt = (
-            D / 2.0 *
+            D /
+            2.0 *
             np.sqrt(
                 np.clip(
                     1.0 - ratio,
-                    0,
-                    1
+                    0.0,
+                    1.0
                 )
             )
         )
@@ -257,11 +303,12 @@ def profile(
     else:
 
         zt = np.array([
-            bottom_h +
-            straight_height
+            top_start
         ])
 
-        rt = np.array([0.0])
+        rt = np.array([
+            D / 2.0
+        ])
 
     z = np.concatenate([
         zb,
@@ -279,7 +326,7 @@ def profile(
 
 
 # =========================================================
-# RADIUS AT HEIGHT
+# RADIUS
 # =========================================================
 
 def radius_at_height(
@@ -294,8 +341,7 @@ def radius_at_height(
         D,
         straight_height,
         bottom_type,
-        top_type,
-        n_points=400,
+        top_type
     )
 
     return float(
@@ -321,7 +367,7 @@ def volume_at_height(
 
     z = max(
         0.0,
-        z
+        float(z)
     )
 
     z_profile, r_profile = profile(
@@ -329,7 +375,7 @@ def volume_at_height(
         straight_height,
         bottom_type,
         top_type,
-        n_points=800,
+        n_points=1000,
     )
 
     z = min(
@@ -345,7 +391,6 @@ def volume_at_height(
     rr = r_profile[mask]
 
     if len(zz) < 2:
-
         return 0.0
 
     area = (
@@ -354,7 +399,6 @@ def volume_at_height(
     )
 
     try:
-
         volume = np.trapezoid(
             area,
             zz
@@ -367,13 +411,11 @@ def volume_at_height(
             zz
         )
 
-    return float(
-        volume
-    )
+    return float(volume)
 
 
 # =========================================================
-# LIQUID HEIGHT FROM WORKING VOLUME
+# LIQUID HEIGHT
 # =========================================================
 
 def liquid_height_from_volume(
@@ -398,11 +440,13 @@ def liquid_height_from_volume(
         )
     )
 
-    total_volume = calculate_total_volume(
-        D=D,
-        straight_height=straight_height,
-        bottom_type=bottom_type,
-        top_type=top_type,
+    total_volume = (
+        calculate_total_volume(
+            D=D,
+            straight_height=straight_height,
+            bottom_type=bottom_type,
+            top_type=top_type,
+        )
     )
 
     if working_volume <= 0:
@@ -429,20 +473,19 @@ def liquid_height_from_volume(
             high
         ) / 2.0
 
-        volume = volume_at_height(
-            mid,
-            D,
-            straight_height,
-            bottom_type,
-            top_type,
+        calculated_volume = (
+            volume_at_height(
+                mid,
+                D,
+                straight_height,
+                bottom_type,
+                top_type,
+            )
         )
 
-        if volume < working_volume:
-
+        if calculated_volume < working_volume:
             low = mid
-
         else:
-
             high = mid
 
     return (
