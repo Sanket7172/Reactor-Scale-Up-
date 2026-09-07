@@ -1,17 +1,7 @@
 import math
 
 
-def calculate_scaleup(
-    base,
-    target,
-    basis,
-):
-    """
-    Compare target reactor against base reactor
-    using selected scale-up criterion.
-
-    This function provides screening-level similarity.
-    """
+def calculate_scaleup(base, target, basis):
 
     result = {
         "basis": basis,
@@ -20,21 +10,25 @@ def calculate_scaleup(
         "target_tip_speed": None,
         "target_power_volume": None,
         "target_qv": None,
+        "target_power_kw": None,
+        "target_torque_nm": None,
         "message": "",
     }
 
-    Vb = base["working_volume"]
     Vt = target["working_volume"]
 
     Db = base["impeller_diameter_m"]
     Dt = target["impeller_diameter_m"]
 
     Nb = base["rpm"]
-    Nt = target["rpm"]
 
-    # -----------------------------------------------------
+    if Db <= 0 or Dt <= 0:
+        result["message"] = "Invalid impeller diameter."
+        return result
+
+    # =====================================================
     # CONSTANT TIP SPEED
-    # -----------------------------------------------------
+    # =====================================================
 
     if basis == "Constant Tip Speed":
 
@@ -47,79 +41,84 @@ def calculate_scaleup(
         result["target_rpm"] = target_rpm
 
         result["target_tip_speed"] = (
-            base["tip_speed"]
+            base.get("tip_speed")
         )
 
         result["message"] = (
             "RPM adjusted to maintain constant impeller tip speed."
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CONSTANT P/V
-    # -----------------------------------------------------
+    # =====================================================
 
     elif basis == "Constant P/V":
 
-        pv = base.get(
-            "power_volume"
+        pv_w_m3 = base.get(
+            "power_volume_w_m3"
         )
 
-        if pv is not None:
+        if pv_w_m3 is None:
 
-            result["target_power_volume"] = pv
-
-            if (
-                target.get("power_kw")
-                is not None
-            ):
-
-                # Screening indication only.
-                # Actual solution depends on Np and D.
-                Np = target.get(
-                    "Np"
-                )
-
-                rho = target.get(
-                    "density",
-                    1000
-                )
-
-                if (
-                    Np is not None
-                    and rho > 0
-                ):
-
-                    D = Dt
-
-                    target_rpm = (
-                        pv *
-                        Vt *
-                        1000.0 /
-                        (
-                            Np *
-                            rho *
-                            D ** 5
-                        )
-                    )
-
-                    target_rpm = (
-                        target_rpm ** (
-                            1.0 / 3.0
-                        )
-                        * 60.0
-                    )
-
-                    result["target_rpm"] = (
-                        target_rpm
-                    )
-
-            result["message"] = (
-                "Target RPM estimated to maintain constant P/V."
+            pv_kw_m3 = base.get(
+                "power_volume_kw_m3"
             )
 
-    # -----------------------------------------------------
+            if pv_kw_m3 is not None:
+                pv_w_m3 = pv_kw_m3 * 1000.0
+
+        Np = target.get("Np")
+        rho = target.get(
+            "density_kg_m3",
+            target.get("density", 1000.0)
+        )
+
+        if (
+            pv_w_m3 is not None
+            and Np is not None
+            and rho > 0
+            and Vt > 0
+        ):
+
+            nimp = target.get(
+                "number_impellers",
+                1
+            )
+
+            N_target = (
+                pv_w_m3 /
+                (
+                    Np *
+                    rho *
+                    Dt**5 *
+                    nimp
+                )
+            ) ** (1.0 / 3.0)
+
+            target_rpm = (
+                N_target *
+                60.0
+            )
+
+            result["target_rpm"] = target_rpm
+
+            result["target_power_volume"] = (
+                pv_w_m3 / 1000.0
+            )
+
+            result["message"] = (
+                "Target RPM calculated to maintain constant P/V."
+            )
+
+        else:
+
+            result["message"] = (
+                "Insufficient target Np, density or P/V data."
+            )
+
+    # =====================================================
     # CONSTANT RPM
-    # -----------------------------------------------------
+    # =====================================================
 
     elif basis == "Constant RPM":
 
@@ -129,50 +128,40 @@ def calculate_scaleup(
             "Target RPM maintained equal to base reactor."
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CONSTANT FROUDE
-    # -----------------------------------------------------
+    # =====================================================
 
     elif basis == "Constant Froude Number":
 
-        Fr_base = base.get(
-            "Fr"
+        target_rpm = (
+            Nb *
+            math.sqrt(
+                Db /
+                Dt
+            )
         )
 
-        if Fr_base is not None:
+        result["target_rpm"] = target_rpm
 
-            target_rpm = (
-                Nb *
-                math.sqrt(
-                    Db / Dt
-                )
-            )
+        result["message"] = (
+            "RPM scaled according to constant Froude similarity."
+        )
 
-            result["target_rpm"] = (
-                target_rpm
-            )
-
-            result["message"] = (
-                "RPM scaled approximately with D^-0.5 "
-                "for constant Froude number."
-            )
-
-    # -----------------------------------------------------
+    # =====================================================
     # CONSTANT REYNOLDS
-    # -----------------------------------------------------
+    # =====================================================
 
     elif basis == "Constant Reynolds Number":
 
-        # Re = rho N D² / mu
-
         rho_b = base.get(
-            "density",
-            1000
+            "density_kg_m3",
+            base.get("density", 1000.0)
         )
 
         rho_t = target.get(
-            "density",
-            rho_b
+            "density_kg_m3",
+            target.get("density", rho_b)
         )
 
         mu_b = base.get(
@@ -188,96 +177,97 @@ def calculate_scaleup(
         if (
             rho_t > 0
             and mu_t > 0
+            and rho_b > 0
+            and mu_b > 0
         ):
 
             N_target = (
                 rho_b /
-                rho_t *
+                rho_t
+                *
                 mu_t /
-                mu_b *
-                Nb *
-                (
-                    Db /
-                    Dt
-                ) ** 2
+                mu_b
+                *
+                (Db / Dt) ** 2
+                *
+                Nb
             )
 
-            result["target_rpm"] = (
-                N_target
-            )
+            result["target_rpm"] = N_target
 
             result["message"] = (
-                "RPM estimated to maintain Reynolds similarity."
+                "RPM calculated for constant Reynolds similarity."
             )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CONSTANT Q/V
-    # -----------------------------------------------------
+    # =====================================================
 
     elif basis == "Constant Pumping / Volume":
 
         qv = base.get(
-            "pumping_per_volume"
+            "qv_1_h"
         )
 
-        result["target_qv"] = qv
+        Nq = target.get(
+            "Nq"
+        )
 
-        if qv:
+        if qv is not None and Nq:
 
-            Nq = target.get(
-                "Nq"
+            nimp = target.get(
+                "number_impellers",
+                1
             )
 
-            if Nq:
-
-                rho = target.get(
-                    "density",
-                    1000
+            N_target = (
+                qv *
+                Vt /
+                (
+                    Nq *
+                    Dt**3 *
+                    nimp
                 )
+            )
 
-                target_rpm = (
-                    qv *
-                    Vt /
-                    (
-                        Nq *
-                        Dt ** 3 *
-                        3600
-                    )
-                    * 60
-                )
+            target_rpm = (
+                N_target /
+                60.0
+            )
 
-                result["target_rpm"] = (
-                    target_rpm
-                )
+            result["target_rpm"] = target_rpm
 
-        result["message"] = (
-            "Target RPM estimated from constant Q/V."
-        )
+            result["target_qv"] = qv
 
-    # -----------------------------------------------------
-    # N/NJS
-    # -----------------------------------------------------
+            result["message"] = (
+                "RPM calculated to maintain constant Q/V."
+            )
+
+        else:
+
+            result["message"] = (
+                "Insufficient Q/V or Nq data."
+            )
+
+    # =====================================================
+    # N/Njs
+    # =====================================================
 
     elif basis == "Constant N/Njs":
 
         result["message"] = (
-            "Njs correlation required. "
-            "Use validated solids-suspension correlation."
+            "Requires solids properties and a validated Njs correlation."
         )
 
-    # -----------------------------------------------------
-    # KLA
-    # -----------------------------------------------------
+    # =====================================================
+    # KLa
+    # =====================================================
 
     elif basis == "Constant KLa":
 
         result["message"] = (
-            "KLa requires validated gas-liquid mass-transfer correlation."
+            "Requires validated gas-liquid mass-transfer correlation."
         )
-
-    # -----------------------------------------------------
-    # USER DEFINED
-    # -----------------------------------------------------
 
     else:
 
