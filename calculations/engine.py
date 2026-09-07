@@ -3,28 +3,8 @@ import math
 from libraries.agitator_geometry import AGITATORS
 
 
-# =========================================================
-# CONSTANT
-# =========================================================
+G = 9.81
 
-G = 9.81  # m/s²
-
-
-# =========================================================
-# HELPER
-# =========================================================
-
-def _number(value, name):
-    """Convert input to float and provide a clear error."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        raise ValueError(f"{name} must be a numeric value.")
-
-
-# =========================================================
-# MAIN REACTOR CALCULATION
-# =========================================================
 
 def calculate_reactor(
     volume_m3,
@@ -38,69 +18,19 @@ def calculate_reactor(
     number_impellers,
     agitator,
     impeller_clearance_m=None,
+
+    # Gas-liquid inputs
+    gas_flow_m3_h=0.0,
+    gas_density_kg_m3=1.20,
+    bubble_diameter_m=0.003,
+    gas_holdup_fraction=0.0,
 ):
     """
-    Reactor mixing and agitation calculations.
+    Preliminary reactor mixing calculation.
 
-    INPUT UNITS
-    -----------
-    volume_m3            : m³
-    tank_diameter_m     : m
-    liquid_height_m     : m
-    density_kg_m3       : kg/m³
-    viscosity_pa_s      : Pa·s
-    surface_tension_n_m : N/m
-    rpm                  : rev/min
-    impeller_diameter_m : m
-    number_impellers    : -
-    agitator             : key from AGITATORS
-    impeller_clearance_m: m
-
-    OUTPUT
-    ------
-    Power                 : W / kW
-    Power density P/V     : W/m³ / kW/m³
-    Tip speed             : m/s
-    Reynolds number       : -
-    Froude number         : -
-    Weber number          : -
-    Pumping               : m³/h
-    Q/V                   : 1/h
-    Turnover time         : min
-    Torque                : N·m
+    All results are screening-level unless supported by
+    validated impeller/vendor/literature correlations.
     """
-
-    # =====================================================
-    # INPUT CONVERSION
-    # =====================================================
-
-    volume_m3 = _number(volume_m3, "Working volume")
-    tank_diameter_m = _number(tank_diameter_m, "Tank diameter")
-    liquid_height_m = _number(liquid_height_m, "Liquid height")
-    density_kg_m3 = _number(density_kg_m3, "Density")
-    viscosity_pa_s = _number(viscosity_pa_s, "Viscosity")
-    surface_tension_n_m = _number(
-        surface_tension_n_m,
-        "Surface tension"
-    )
-    rpm = _number(rpm, "RPM")
-    impeller_diameter_m = _number(
-        impeller_diameter_m,
-        "Impeller diameter"
-    )
-
-    try:
-        number_impellers = int(number_impellers)
-    except (TypeError, ValueError):
-        raise ValueError(
-            "Number of impellers must be an integer."
-        )
-
-    if impeller_clearance_m is not None:
-        impeller_clearance_m = _number(
-            impeller_clearance_m,
-            "Impeller clearance"
-        )
 
     # =====================================================
     # INPUT VALIDATION
@@ -122,100 +52,40 @@ def calculate_reactor(
         raise ValueError("Viscosity must be greater than zero.")
 
     if surface_tension_n_m <= 0:
-        raise ValueError(
-            "Surface tension must be greater than zero."
-        )
+        raise ValueError("Surface tension must be greater than zero.")
 
     if rpm <= 0:
-        raise ValueError("RPM must be greater than zero.")
+        raise ValueError("Agitator speed must be greater than zero.")
 
     if impeller_diameter_m <= 0:
-        raise ValueError(
-            "Impeller diameter must be greater than zero."
-        )
+        raise ValueError("Impeller diameter must be greater than zero.")
 
     if number_impellers < 1:
-        raise ValueError(
-            "Number of impellers must be at least 1."
-        )
-
-    if impeller_clearance_m is not None:
-        if impeller_clearance_m < 0:
-            raise ValueError(
-                "Impeller clearance cannot be negative."
-            )
-
-    # =====================================================
-    # AGITATOR LIBRARY
-    # =====================================================
+        raise ValueError("Number of impellers must be at least 1.")
 
     if agitator not in AGITATORS:
         raise ValueError(
-            f"Agitator '{agitator}' not found in AGITATORS."
+            f"Agitator '{agitator}' is not available."
         )
-
-    agitator_data = AGITATORS[agitator]
-
-    if not isinstance(agitator_data, dict):
-        raise ValueError(
-            f"Invalid data for agitator '{agitator}'."
-        )
-
-    # Support both np/Np and nq/Nq naming
-    np_value = agitator_data.get("np")
-
-    if np_value is None:
-        np_value = agitator_data.get("Np")
-
-    nq_value = agitator_data.get("nq")
-
-    if nq_value is None:
-        nq_value = agitator_data.get("Nq")
-
-    # Np is required for power calculation
-    if np_value is None:
-        raise ValueError(
-            f"Np is missing for agitator '{agitator}'."
-        )
-
-    np_value = _number(
-        np_value,
-        f"Np for {agitator}"
-    )
-
-    if np_value <= 0:
-        raise ValueError(
-            f"Np must be greater than zero for '{agitator}'."
-        )
-
-    # Nq is optional
-    if nq_value is not None:
-        nq_value = _number(
-            nq_value,
-            f"Nq for {agitator}"
-        )
-
-        if nq_value <= 0:
-            raise ValueError(
-                f"Nq must be greater than zero for '{agitator}'."
-            )
 
     # =====================================================
     # BASIC VARIABLES
     # =====================================================
 
-    rho = density_kg_m3
-    mu = viscosity_pa_s
-    sigma = surface_tension_n_m
+    rho = float(density_kg_m3)
+    mu = float(viscosity_pa_s)
+    D = float(impeller_diameter_m)
+    T = float(tank_diameter_m)
 
-    T = tank_diameter_m
-    D = impeller_diameter_m
+    N_rpm = float(rpm)
+    N = N_rpm / 60.0
 
-    # =====================================================
-    # RPM TO REV/S
-    # =====================================================
+    nimp = int(number_impellers)
 
-    N = rpm / 60.0
+    agitator_data = AGITATORS[agitator]
+
+    Np = agitator_data.get("np")
+    Nq = agitator_data.get("nq")
 
     # =====================================================
     # GEOMETRY RATIOS
@@ -225,415 +95,392 @@ def calculate_reactor(
 
     H_T = liquid_height_m / T
 
-    C_T = None
+    clearance_T = None
 
     if impeller_clearance_m is not None:
-        C_T = impeller_clearance_m / T
+
+        if impeller_clearance_m < 0:
+            raise ValueError(
+                "Impeller clearance cannot be negative."
+            )
+
+        clearance_T = impeller_clearance_m / T
 
     # =====================================================
     # TIP SPEED
-    #
-    # u = πDN
-    #
-    # Result = m/s
     # =====================================================
 
-    tip_speed_m_s = math.pi * D * N
+    tip_speed = math.pi * D * N
 
     # =====================================================
     # REYNOLDS NUMBER
-    #
-    # Re = ρND² / μ
     # =====================================================
 
-    reynolds_number = (
-        rho
-        * N
-        * D**2
-        / mu
+    reynolds = (
+        rho *
+        N *
+        D**2 /
+        mu
     )
 
     # =====================================================
     # FROUDE NUMBER
-    #
-    # Fr = N²D / g
     # =====================================================
 
-    froude_number = (
-        N**2
-        * D
-        / G
-    )
-
-    # =====================================================
-    # WEBER NUMBER
-    #
-    # We = ρN²D³ / σ
-    # =====================================================
-
-    weber_number = (
-        rho
-        * N**2
-        * D**3
-        / sigma
+    froude = (
+        N**2 *
+        D /
+        G
     )
 
     # =====================================================
     # POWER
-    #
-    # P = Np × ρ × N³ × D⁵
-    #
-    # P = W
     # =====================================================
 
-    power_single_w = (
-        np_value
-        * rho
-        * N**3
-        * D**5
-    )
+    power_w = None
+    power_kw = None
+    power_volume_w_m3 = None
+    power_volume_kw_m3 = None
+    torque_nm = None
 
-    # Preliminary multi-impeller estimate
-    power_total_w = (
-        power_single_w
-        * number_impellers
-    )
+    if Np is not None:
 
-    # =====================================================
-    # POWER → kW
-    # =====================================================
-
-    power_single_kw = (
-        power_single_w / 1000.0
-    )
-
-    power_total_kw = (
-        power_total_w / 1000.0
-    )
-
-    # =====================================================
-    # POWER / VOLUME
-    #
-    # W/m³
-    # =====================================================
-
-    power_density_w_m3 = (
-        power_total_w
-        / volume_m3
-    )
-
-    # =====================================================
-    # POWER / VOLUME
-    #
-    # kW/m³
-    #
-    # 1 kW = 1000 W
-    # =====================================================
-
-    power_density_kw_m3 = (
-        power_density_w_m3 / 1000.0
-    )
-
-    # =====================================================
-    # TORQUE
-    #
-    # T = P / (2πN)
-    #
-    # P = W
-    # N = rev/s
-    #
-    # Result = N·m
-    # =====================================================
-
-    torque_nm = (
-        power_total_w
-        / (2.0 * math.pi * N)
-    )
-
-    # =====================================================
-    # PUMPING CAPACITY
-    #
-    # Q = Nq × N × D³
-    #
-    # Result = m³/s
-    # =====================================================
-
-    pumping_single_m3_s = None
-    pumping_total_m3_s = None
-
-    if nq_value is not None:
-
-        pumping_single_m3_s = (
-            nq_value
-            * N
-            * D**3
+        power_w = (
+            Np *
+            rho *
+            N**3 *
+            D**5 *
+            nimp
         )
 
-        pumping_total_m3_s = (
-            pumping_single_m3_s
-            * number_impellers
+        power_kw = power_w / 1000.0
+
+        power_volume_w_m3 = (
+            power_w /
+            volume_m3
+        )
+
+        # PRIMARY ENGINEERING RESULT
+        power_volume_kw_m3 = (
+            power_kw /
+            volume_m3
+        )
+
+        torque_nm = (
+            power_w /
+            (2.0 * math.pi * N)
         )
 
     # =====================================================
-    # PUMPING → m³/h
+    # PUMPING
     # =====================================================
 
-    pumping_single_m3_h = None
-    pumping_total_m3_h = None
-
-    if pumping_single_m3_s is not None:
-
-        pumping_single_m3_h = (
-            pumping_single_m3_s
-            * 3600.0
-        )
-
-        pumping_total_m3_h = (
-            pumping_total_m3_s
-            * 3600.0
-        )
-
-    # =====================================================
-    # Q/V
-    #
-    # Q/V = (m³/h) / m³
-    #
-    # Result = 1/h
-    # =====================================================
-
+    pumping_m3_s = None
+    pumping_m3_h = None
     qv_1_h = None
-
-    if pumping_total_m3_h is not None:
-
-        qv_1_h = (
-            pumping_total_m3_h
-            / volume_m3
-        )
-
-    # =====================================================
-    # TURNOVER TIME
-    #
-    # Turnover time = V/Q
-    #
-    # Result = min
-    # =====================================================
-
     turnover_time_min = None
 
-    if qv_1_h is not None and qv_1_h > 0:
+    if Nq is not None:
 
-        turnover_time_min = (
-            60.0 / qv_1_h
+        pumping_m3_s = (
+            Nq *
+            N *
+            D**3 *
+            nimp
         )
+
+        pumping_m3_h = (
+            pumping_m3_s *
+            3600.0
+        )
+
+        qv_1_h = (
+            pumping_m3_h /
+            volume_m3
+        )
+
+        if qv_1_h > 0:
+
+            turnover_time_min = (
+                60.0 /
+                qv_1_h
+            )
 
     # =====================================================
     # MIXING REGIME
     # =====================================================
 
-    if reynolds_number < 10:
-
+    if reynolds < 10:
         mixing_regime = "Laminar"
 
-    elif reynolds_number < 10000:
-
+    elif reynolds < 10000:
         mixing_regime = "Transitional"
 
     else:
-
         mixing_regime = "Turbulent"
 
     # =====================================================
-    # ENGINEERING WARNINGS
+    # GAS-LIQUID SCREENING
     # =====================================================
 
-    engineering_warnings = []
-
-    if D_T < 0.20:
-        engineering_warnings.append(
-            "D/T is low. Verify impeller diameter and circulation."
-        )
-
-    if D_T > 0.70:
-        engineering_warnings.append(
-            "D/T is high. Verify power and mechanical suitability."
-        )
-
-    if H_T < 0.50:
-        engineering_warnings.append(
-            "H/T is low. Verify impeller submergence."
-        )
-
-    if H_T > 2.50:
-        engineering_warnings.append(
-            "H/T is high. Check need for multiple impellers."
-        )
-
-    if C_T is not None and C_T < 0.15:
-        engineering_warnings.append(
-            "C/T is low. Verify bottom clearance."
-        )
-
-    if reynolds_number < 10:
-        engineering_warnings.append(
-            "Laminar regime detected. Verify applicability "
-            "of the selected power correlation."
-        )
-
-    if number_impellers > 1:
-        engineering_warnings.append(
-            "Multiple-impeller power and pumping are estimated "
-            "by additive scaling. Detailed hydrodynamic analysis "
-            "is recommended for final design."
-        )
-
-    # =====================================================
-    # RETURN RESULTS
-    # =====================================================
+    gas_result = calculate_gas_liquid_screening(
+        volume_m3=volume_m3,
+        liquid_height_m=liquid_height_m,
+        tank_diameter_m=T,
+        gas_flow_m3_h=gas_flow_m3_h,
+        gas_density_kg_m3=gas_density_kg_m3,
+        bubble_diameter_m=bubble_diameter_m,
+        density_kg_m3=rho,
+        viscosity_pa_s=mu,
+        surface_tension_n_m=surface_tension_n_m,
+        power_volume_w_m3=power_volume_w_m3,
+        gas_holdup_fraction=gas_holdup_fraction,
+    )
 
     return {
 
-        # =================================================
-        # BASIC
-        # =================================================
+        "tip_speed": tip_speed,
 
-        "volume_m3": volume_m3,
+        "Re": reynolds,
+        "reynolds_number": reynolds,
 
-        "tank_diameter_m": tank_diameter_m,
+        "Fr": froude,
+        "froude_number": froude,
 
-        "liquid_height_m": liquid_height_m,
-
-        "rpm": rpm,
-
-        "rotational_speed_rps": N,
-
-        # =================================================
-        # AGITATOR
-        # =================================================
+        "Np": Np,
+        "Nq": Nq,
 
         "agitator": agitator,
-
-        "Np": np_value,
-
-        "Nq": nq_value,
-
-        "number_impellers": number_impellers,
-
+        "number_impellers": nimp,
         "impeller_diameter_m": D,
 
-        # =================================================
-        # GEOMETRY
-        # =================================================
+        "power_w": power_w,
+        "power_kw": power_kw,
 
-        "D_T": D_T,
+        # W/m3 retained for reference
+        "power_volume": power_volume_w_m3,
+        "power_volume_w_m3": power_volume_w_m3,
 
-        "D_T_ratio": D_T,
+        # NEW PRIMARY VALUE
+        "power_volume_kw_m3": power_volume_kw_m3,
 
-        "H_T": H_T,
-
-        "H_T_ratio": H_T,
-
-        "C_T": C_T,
-
-        "clearance_T": C_T,
-
-        # =================================================
-        # HYDRODYNAMIC PARAMETERS
-        # =================================================
-
-        "tip_speed": tip_speed_m_s,
-
-        "tip_speed_m_s": tip_speed_m_s,
-
-        "Re": reynolds_number,
-
-        "reynolds_number": reynolds_number,
-
-        "Fr": froude_number,
-
-        "froude_number": froude_number,
-
-        "We": weber_number,
-
-        "weber_number": weber_number,
-
-        # =================================================
-        # POWER
-        # =================================================
-
-        "power_single_w": power_single_w,
-
-        "power_single_kw": power_single_kw,
-
-        "power_w": power_total_w,
-
-        "power_kw": power_total_kw,
-
-        # =================================================
-        # P/V
-        # =================================================
-
-        "power_density_w_m3": power_density_w_m3,
-
-        "power_density_kw_m3": power_density_kw_m3,
-
-        "specific_power_kw_m3": power_density_kw_m3,
-
-        # Compatibility aliases
-        "power_volume": power_density_w_m3,
-
-        "power_per_volume": power_density_w_m3,
-
-        # =================================================
-        # TORQUE
-        # =================================================
+        "specific_power_kw_m3": power_volume_kw_m3,
 
         "torque_nm": torque_nm,
 
-        # =================================================
-        # PUMPING
-        # =================================================
-
-        "pumping_single_m3_s": pumping_single_m3_s,
-
-        "pumping_single_m3_h": pumping_single_m3_h,
-
-        "pumping_m3_s": pumping_total_m3_s,
-
-        "pumping_m3_h": pumping_total_m3_h,
-
-        # =================================================
-        # Q/V
-        # =================================================
+        "pumping_m3_s": pumping_m3_s,
+        "pumping_m3_h": pumping_m3_h,
 
         "qv_1_h": qv_1_h,
-
         "pumping_per_volume": qv_1_h,
-
-        # =================================================
-        # TURNOVER
-        # =================================================
 
         "turnover_time_min": turnover_time_min,
 
-        # =================================================
-        # MIXING REGIME
-        # =================================================
+        "D_T": D_T,
+        "H_T": H_T,
+        "clearance_T": clearance_T,
 
         "mixing_regime": mixing_regime,
 
-        # =================================================
-        # PROCESS PROPERTIES
-        # =================================================
-
-        "density_kg_m3": rho,
-
         "viscosity_pa_s": mu,
+        "density_kg_m3": rho,
+        "surface_tension_n_m": surface_tension_n_m,
 
-        "surface_tension_n_m": sigma,
-
-        # =================================================
-        # WARNINGS
-        # =================================================
-
-        "engineering_warnings": engineering_warnings,
+        # Gas-liquid
+        **gas_result,
     }
+
+
+def calculate_gas_liquid_screening(
+    volume_m3,
+    liquid_height_m,
+    tank_diameter_m,
+    gas_flow_m3_h,
+    gas_density_kg_m3,
+    bubble_diameter_m,
+    density_kg_m3,
+    viscosity_pa_s,
+    surface_tension_n_m,
+    power_volume_w_m3,
+    gas_holdup_fraction=0.0,
+):
+    """
+    Screening-level gas-liquid calculations.
+
+    kLa should NOT be treated as a final design value.
+    Use validated system-specific correlations or pilot data
+    for final design.
+    """
+
+    result = {
+        "gas_flow_m3_h": gas_flow_m3_h,
+        "gas_superficial_velocity_m_s": None,
+        "gas_holdup_percent": None,
+        "bubble_rise_velocity_m_s": None,
+        "bubble_residence_time_s": None,
+        "bubble_residence_time_min": None,
+        "interfacial_area_m2_m3": None,
+        "kla_1_h": None,
+        "kla_1_s": None,
+    }
+
+    if gas_flow_m3_h <= 0:
+        return result
+
+    if bubble_diameter_m <= 0:
+        return result
+
+    cross_section = (
+        math.pi /
+        4.0 *
+        tank_diameter_m**2
+    )
+
+    gas_flow_m3_s = (
+        gas_flow_m3_h /
+        3600.0
+    )
+
+    superficial_velocity = (
+        gas_flow_m3_s /
+        cross_section
+    )
+
+    # =====================================================
+    # BUBBLE RISE VELOCITY
+    # =====================================================
+
+    # Screening Stokes velocity.
+    # Appropriate only for small, approximately spherical
+    # bubbles in creeping-flow conditions.
+
+    bubble_velocity_stokes = (
+        (
+            density_kg_m3 -
+            gas_density_kg_m3
+        )
+        * G *
+        bubble_diameter_m**2
+        /
+        (
+            18.0 *
+            viscosity_pa_s
+        )
+    )
+
+    # Prevent unrealistic zero/negative velocity.
+    bubble_velocity = max(
+        0.001,
+        bubble_velocity_stokes
+    )
+
+    # =====================================================
+    # RESIDENCE TIME
+    # =====================================================
+
+    residence_time_s = (
+        liquid_height_m /
+        bubble_velocity
+    )
+
+    residence_time_min = (
+        residence_time_s /
+        60.0
+    )
+
+    # =====================================================
+    # GAS HOLDUP
+    # =====================================================
+
+    if gas_holdup_fraction <= 0:
+
+        # Very rough screening estimate.
+        estimated_holdup = min(
+            0.20,
+            0.02 +
+            0.0005 *
+            max(power_volume_w_m3 or 0, 0) +
+            0.01 *
+            superficial_velocity
+        )
+
+        gas_holdup = estimated_holdup
+
+    else:
+
+        gas_holdup = min(
+            max(gas_holdup_fraction, 0.0),
+            0.80
+        )
+
+    # =====================================================
+    # INTERFACIAL AREA
+    # =====================================================
+
+    # a = 6 * epsilon_g / d_b
+
+    interfacial_area = (
+        6.0 *
+        gas_holdup /
+        bubble_diameter_m
+    )
+
+    # =====================================================
+    # SCREENING kLa
+    # =====================================================
+
+    # Approximate mass-transfer coefficient.
+    #
+    # This is deliberately labelled screening-level.
+    # Actual kLa requires a validated correlation.
+
+    kla_s = (
+        0.10 *
+        (
+            max(
+                power_volume_w_m3 or 0.0,
+                0.001
+            )
+            ** 0.5
+        )
+        *
+        (
+            max(
+                superficial_velocity,
+                0.0001
+            )
+            ** 0.30
+        )
+    )
+
+    kla_h = kla_s * 3600.0
+
+    result.update(
+        {
+            "gas_superficial_velocity_m_s":
+                superficial_velocity,
+
+            "gas_holdup_percent":
+                gas_holdup * 100.0,
+
+            "bubble_rise_velocity_m_s":
+                bubble_velocity,
+
+            "bubble_residence_time_s":
+                residence_time_s,
+
+            "bubble_residence_time_min":
+                residence_time_min,
+
+            "interfacial_area_m2_m3":
+                interfacial_area,
+
+            "kla_1_s":
+                kla_s,
+
+            "kla_1_h":
+                kla_h,
+        }
+    )
+
+    return result
