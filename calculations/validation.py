@@ -11,30 +11,39 @@ def validate_reactor(
     agitator,
     density_kg_m3,
     viscosity_pa_s,
+    power_volume_kw_m3=None,
+    gas_flow_m3_h=0.0,
+    kLa_1_h=None,
 ):
 
     checks = []
 
     # =====================================================
-    # VOLUME
+    # BASIC GEOMETRY
     # =====================================================
 
-    if volume_m3 <= vessel_volume_m3:
+    if vessel_volume_m3 <= 0:
+
+        checks.append({
+            "severity": "FAIL",
+            "message":
+                "Calculated vessel volume is invalid.",
+        })
+
+    elif volume_m3 <= vessel_volume_m3:
 
         checks.append({
             "severity": "PASS",
-            "message": (
-                "Operating volume is within calculated vessel capacity."
-            ),
+            "message":
+                "Working volume is within vessel capacity.",
         })
 
     else:
 
         checks.append({
             "severity": "FAIL",
-            "message": (
-                "Operating volume exceeds calculated vessel capacity."
-            ),
+            "message":
+                "Working volume exceeds vessel capacity.",
         })
 
     # =====================================================
@@ -44,7 +53,7 @@ def validate_reactor(
     fill = (
         volume_m3 /
         vessel_volume_m3 *
-        100
+        100.0
         if vessel_volume_m3 > 0
         else 0
     )
@@ -53,69 +62,63 @@ def validate_reactor(
 
         checks.append({
             "severity": "PASS",
-            "message": (
-                f"Operating fill = {fill:.1f}%."
-            ),
+            "message":
+                f"Operating fill = {fill:.1f}%.",
         })
 
     elif 25 <= fill < 40 or 80 < fill <= 90:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
+            "message":
                 f"Operating fill = {fill:.1f}%. "
-                "Review process headspace and mixing performance."
-            ),
+                "Review headspace and impeller immersion.",
         })
 
     else:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
+            "message":
                 f"Operating fill = {fill:.1f}%. "
-                "This may be outside the preferred operating range."
-            ),
+                "Confirm suitability for process operation.",
         })
 
     # =====================================================
-    # IMPeller / TANK RATIO
+    # D/T
     # =====================================================
 
-    D_ratio = (
+    D_T = (
         impeller_diameter_m /
         tank_diameter_m
         if tank_diameter_m > 0
         else 0
     )
 
-    if 0.25 <= D_ratio <= 0.50:
+    if 0.25 <= D_T <= 0.50:
 
         checks.append({
             "severity": "PASS",
-            "message": (
-                f"Impeller/Tank diameter ratio = {D_ratio:.3f}."
-            ),
+            "message":
+                f"Impeller/Tank ratio = {D_T:.3f}.",
         })
 
-    elif 0.20 <= D_ratio <= 0.60:
+    elif 0.20 <= D_T <= 0.60:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                f"Impeller/Tank ratio = {D_ratio:.3f}. "
-                "Review against impeller-specific design guidance."
-            ),
+            "message":
+                f"Impeller/Tank ratio = {D_T:.3f}. "
+                "Review impeller-specific guidance.",
         })
 
     else:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                f"Impeller/Tank ratio = {D_ratio:.3f}. "
-                "This is outside a commonly screened range."
-            ),
+            "message":
+                f"Impeller/Tank ratio = {D_T:.3f}. "
+                "Outside common preliminary screening range.",
         })
 
     # =====================================================
@@ -126,59 +129,55 @@ def validate_reactor(
 
         checks.append({
             "severity": "PASS",
-            "message": (
-                f"{number_baffles} baffles provided."
-            ),
+            "message":
+                f"{number_baffles} baffles provided.",
         })
 
     elif number_baffles > 0:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                f"Only {number_baffles} baffles provided. "
-                "Check vortex suppression."
-            ),
+            "message":
+                f"{number_baffles} baffles provided. "
+                "Review vortex suppression.",
         })
 
     else:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                "No baffles selected. Strong rotational motion may occur."
-            ),
+            "message":
+                "No baffles provided. "
+                "Strong rotational flow may occur.",
         })
 
     # =====================================================
-    # LIQUID HEIGHT
+    # H/T
     # =====================================================
 
-    if liquid_height_m > 0:
+    H_T = (
+        liquid_height_m /
+        tank_diameter_m
+        if tank_diameter_m > 0
+        else 0
+    )
 
-        H_liquid_D = (
-            liquid_height_m /
-            tank_diameter_m
-        )
+    if H_T >= 1.0:
 
-        if H_liquid_D >= 1.0:
+        checks.append({
+            "severity": "PASS",
+            "message":
+                f"Liquid height/Tank diameter = {H_T:.2f}.",
+        })
 
-            checks.append({
-                "severity": "PASS",
-                "message": (
-                    f"Liquid height/Tank diameter = {H_liquid_D:.2f}."
-                ),
-            })
+    else:
 
-        else:
-
-            checks.append({
-                "severity": "WARNING",
-                "message": (
-                    f"Liquid height/Tank diameter = {H_liquid_D:.2f}. "
-                    "Review impeller coverage and circulation."
-                ),
-            })
+        checks.append({
+            "severity": "WARNING",
+            "message":
+                f"Liquid height/Tank diameter = {H_T:.2f}. "
+                "Review liquid coverage and circulation.",
+        })
 
     # =====================================================
     # RPM
@@ -188,20 +187,59 @@ def validate_reactor(
 
         checks.append({
             "severity": "PASS",
-            "message": (
-                f"Agitator speed = {rpm:.1f} RPM."
-            ),
+            "message":
+                f"Agitator speed = {rpm:.1f} RPM.",
+        })
+
+    elif rpm <= 500:
+
+        checks.append({
+            "severity": "WARNING",
+            "message":
+                f"Agitator speed = {rpm:.1f} RPM. "
+                "Review mechanical loading and vortexing.",
         })
 
     else:
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                f"High agitator speed = {rpm:.1f} RPM. "
-                "Review mechanical and vortex limitations."
-            ),
+            "message":
+                f"Agitator speed = {rpm:.1f} RPM. "
+                "High-speed mechanical review required.",
         })
+
+    # =====================================================
+    # POWER/VOLUME
+    # =====================================================
+
+    if power_volume_kw_m3 is not None:
+
+        if power_volume_kw_m3 <= 5:
+
+            checks.append({
+                "severity": "PASS",
+                "message":
+                    f"P/V = {power_volume_kw_m3:.3f} kW/m³.",
+            })
+
+        elif power_volume_kw_m3 <= 20:
+
+            checks.append({
+                "severity": "WARNING",
+                "message":
+                    f"P/V = {power_volume_kw_m3:.3f} kW/m³. "
+                    "Review process requirement and motor load.",
+            })
+
+        else:
+
+            checks.append({
+                "severity": "WARNING",
+                "message":
+                    f"P/V = {power_volume_kw_m3:.3f} kW/m³. "
+                    "High specific power; verify application.",
+            })
 
     # =====================================================
     # RCI
@@ -211,9 +249,9 @@ def validate_reactor(
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                "RCI selected. Use validated manufacturer/test Np/Nq data."
-            ),
+            "message":
+                "RCI selected. Validate Np/Nq from manufacturer "
+                "or test data before using calculated power.",
         })
 
     # =====================================================
@@ -224,14 +262,30 @@ def validate_reactor(
 
         checks.append({
             "severity": "WARNING",
-            "message": (
-                "High viscosity detected. Verify power correlation "
-                "and impeller suitability."
-            ),
+            "message":
+                "High viscosity detected. "
+                "Validate laminar power correlation, torque "
+                "and gearbox selection.",
         })
 
     # =====================================================
-    # RESULT
+    # GAS-LIQUID
+    # =====================================================
+
+    if gas_flow_m3_h and gas_flow_m3_h > 0:
+
+        if kLa_1_h is not None:
+
+            checks.append({
+                "severity": "WARNING",
+                "message":
+                    f"Estimated kLa = {kLa_1_h:.2f} 1/h. "
+                    "Validate with applicable gas-liquid "
+                    "mass-transfer correlation or pilot data.",
+            })
+
+    # =====================================================
+    # FINAL STATUS
     # =====================================================
 
     failures = sum(
