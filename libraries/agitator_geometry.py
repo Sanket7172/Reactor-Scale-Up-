@@ -24,6 +24,7 @@ AGITATORS = {
         "recommended_for": [
             "Liquid-Liquid",
             "Solid-Liquid",
+            "Gas-Liquid",
             "Crystallization",
         ],
     },
