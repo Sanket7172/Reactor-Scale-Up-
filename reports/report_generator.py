@@ -11,158 +11,290 @@ from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
 
 
-# =========================================================
-# SUMMARY DATAFRAME
-# =========================================================
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 
-def create_summary_dataframe(
-    reactors,
-):
+def _safe(value, default="N/A"):
+    """Return a safe display value."""
+    if value is None:
+        return default
+
+    if isinstance(value, float):
+        if pd.isna(value):
+            return default
+
+    return value
+
+
+def _fmt(value, decimals=3):
+    """Format numerical values safely."""
+    if value is None:
+        return "N/A"
+
+    try:
+        if pd.isna(value):
+            return "N/A"
+    except Exception:
+        pass
+
+    try:
+        return f"{float(value):.{decimals}f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _get(reactor, *keys, default=None):
+    """Return the first available key from a reactor dictionary."""
+    for key in keys:
+        if key in reactor and reactor[key] is not None:
+            return reactor[key]
+
+    return default
+
+
+# ============================================================
+# SUMMARY DATAFRAME
+# ============================================================
+
+def create_summary_dataframe(reactors):
+    """
+    Create a summary DataFrame for all reactors.
+
+    Parameters
+    ----------
+    reactors : list[dict]
+        Reactor calculation dictionaries.
+
+    Returns
+    -------
+    pandas.DataFrame
+    """
 
     rows = []
 
-    for r in reactors:
+    for i, reactor in enumerate(reactors, start=1):
 
-        rows.append(
-            {
-                "Reactor":
-                    r.get("name"),
+        row = {
+            "Reactor": _get(
+                reactor,
+                "name",
+                "reactor_name",
+                default=f"Reactor {i}"
+            ),
 
-                "Working Volume (m3)":
-                    r.get("working_volume"),
+            "Volume (m³)": _get(
+                reactor,
+                "volume_m3",
+                "working_volume_m3",
+                default=None
+            ),
 
-                "Vessel Capacity (m3)":
-                    r.get("vessel_volume"),
+            "Vessel Volume (m³)": _get(
+                reactor,
+                "vessel_volume_m3",
+                "total_volume_m3",
+                default=None
+            ),
 
-                "Tank ID (m)":
-                    r.get("tank_diameter_m"),
+            "Tank Diameter (m)": _get(
+                reactor,
+                "tank_diameter_m",
+                "diameter_m",
+                "D",
+                default=None
+            ),
 
-                "Liquid Height (m)":
-                    r.get("liquid_height_m"),
+            "Liquid Height (m)": _get(
+                reactor,
+                "liquid_height_m",
+                "HL",
+                default=None
+            ),
 
-                "Agitator":
-                    r.get("agitator"),
+            "RPM": _get(
+                reactor,
+                "rpm",
+                "speed_rpm",
+                "N",
+                default=None
+            ),
 
-                "Impeller Diameter (m)":
-                    r.get("impeller_diameter_m"),
+            "Impeller Diameter (m)": _get(
+                reactor,
+                "impeller_diameter_m",
+                "Di",
+                default=None
+            ),
 
-                "RPM":
-                    r.get("rpm"),
+            "Number of Impellers": _get(
+                reactor,
+                "number_impellers",
+                "impellers",
+                default=None
+            ),
 
-                "Power (kW)":
-                    r.get("power_kw"),
+            "Power (kW)": _get(
+                reactor,
+                "power_kw",
+                "shaft_power_kw",
+                default=None
+            ),
 
-                "P/V (kW/m3)":
-                    r.get(
-                        "power_volume_kw_m3"
-                    ),
+            "P/V (kW/m³)": _get(
+                reactor,
+                "power_volume_kw_m3",
+                "P_V_kW_m3",
+                default=None
+            ),
 
-                "Tip Speed (m/s)":
-                    r.get("tip_speed"),
+            "P/V (W/m³)": _get(
+                reactor,
+                "power_volume_w_m3",
+                "P_V_W_m3",
+                default=None
+            ),
 
-                "Re":
-                    r.get("Re"),
+            "Tip Speed (m/s)": _get(
+                reactor,
+                "tip_speed_m_s",
+                "tip_speed",
+                default=None
+            ),
 
-                "Fr":
-                    r.get("Fr"),
+            "Reynolds Number": _get(
+                reactor,
+                "reynolds_number",
+                "Re",
+                default=None
+            ),
 
-                "Q (m3/h)":
-                    r.get("pumping_m3_h"),
+            "Froude Number": _get(
+                reactor,
+                "froude_number",
+                "Fr",
+                default=None
+            ),
 
-                "Q/V (1/h)":
-                    r.get("qv_1_h"),
+            "Pumping Capacity (m³/h)": _get(
+                reactor,
+                "pumping_capacity_m3_h",
+                "pumping_rate_m3_h",
+                default=None
+            ),
 
-                "Turnover Time (min)":
-                    r.get(
-                        "turnover_time_min"
-                    ),
+            "Turnover (1/h)": _get(
+                reactor,
+                "turnover_1_h",
+                "turnover_rate_1_h",
+                default=None
+            ),
 
-                "Gas Flow (m3/h)":
-                    r.get(
-                        "gas_flow_m3_h"
-                    ),
+            "Njs (RPM)": _get(
+                reactor,
+                "njs_rpm",
+                "Njs",
+                default=None
+            ),
 
-                "Bubble Residence (min)":
-                    r.get(
-                        "bubble_residence_time_min"
-                    ),
+            "kLa (1/h)": _get(
+                reactor,
+                "kLa_1_h",
+                "kla_1_h",
+                "kla",
+                default=None
+            ),
 
-                "kLa (1/h)":
-                    r.get(
-                        "kLa_1_h"
-                    ),
+            "Gas Holdup": _get(
+                reactor,
+                "gas_holdup_fraction",
+                "gas_holdup",
+                default=None
+            ),
+        }
 
-                "Validation":
-                    r.get(
-                        "validation",
-                        {}
-                    ).get(
-                        "overall",
-                        "REVIEW"
-                    ),
-            }
-        )
+        rows.append(row)
 
     return pd.DataFrame(rows)
 
 
-# =========================================================
+# ============================================================
 # WORD REPORT
-# =========================================================
+# ============================================================
 
 def create_word_report(
-    project_name,
-    prepared_by,
-    process_type,
-    study_mode,
-    scaleup_basis,
-    reactors,
+    project_name="Reactor Scale-Up Study",
+    prepared_by="",
+    process_type="",
+    study_mode="",
+    scaleup_basis="",
+    reactors=None,
     scaleup_result=None,
 ):
+    """
+    Generate a professional Word report.
+
+    Returns
+    -------
+    BytesIO
+        Word document stored in memory.
+    """
+
+    if reactors is None:
+        reactors = []
 
     document = Document()
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # DOCUMENT DEFAULT FONT
+    # --------------------------------------------------------
+
+    styles = document.styles
+
+    normal_style = styles["Normal"]
+    normal_style.font.name = "Arial"
+    normal_style.font.size = Pt(9)
+
+    # --------------------------------------------------------
     # TITLE
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     title = document.add_heading(
-        "Reactor Scale-Up Engineering Report",
-        0
+        "REACTOR SCALE-UP ENGINEERING REPORT",
+        level=0
     )
 
     title.alignment = 1
 
     document.add_paragraph(
-        f"Project: {project_name}"
+        f"Project: {_safe(project_name)}"
     )
 
     document.add_paragraph(
-        f"Prepared By: {prepared_by}"
+        f"Prepared By: {_safe(prepared_by)}"
     )
 
     document.add_paragraph(
-        f"Process Type: {process_type}"
+        f"Process Type: {_safe(process_type)}"
     )
 
     document.add_paragraph(
-        f"Study Mode: {study_mode}"
+        f"Study Mode: {_safe(study_mode)}"
     )
 
     document.add_paragraph(
-        f"Scale-Up Basis: {scaleup_basis}"
+        f"Scale-Up Basis: {_safe(scaleup_basis)}"
     )
 
     document.add_paragraph(
-        f"Generated: "
-        f"{datetime.now().strftime('%d-%m-%Y %H:%M')}"
+        f"Report Date: {datetime.now().strftime('%d-%m-%Y %H:%M')}"
     )
 
-    document.add_page_break()
+    document.add_paragraph("")
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # EXECUTIVE SUMMARY
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     document.add_heading(
         "1. Executive Summary",
@@ -170,161 +302,229 @@ def create_word_report(
     )
 
     document.add_paragraph(
-        "This report presents a preliminary engineering "
-        "assessment of reactor geometry, agitation "
-        "performance and scale-up parameters."
+        "This report presents the reactor scale-up engineering "
+        "assessment including reactor geometry, agitation, "
+        "mixing performance, power requirements, gas-liquid "
+        "parameters where applicable, scale-up comparison and "
+        "engineering validation."
     )
 
-    document.add_paragraph(
-        "The calculations are intended for engineering "
-        "screening and preliminary scale-up assessment. "
-        "Final equipment design shall be verified against "
-        "validated correlations, vendor data, pilot trials "
-        "and applicable mechanical design standards."
-    )
-
-    # -----------------------------------------------------
-    # SUMMARY TABLE
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # REACTOR SUMMARY
+    # --------------------------------------------------------
 
     document.add_heading(
         "2. Reactor Summary",
         level=1
     )
 
-    df = create_summary_dataframe(
-        reactors
-    )
+    summary_df = create_summary_dataframe(reactors)
 
-    table = document.add_table(
-        rows=1,
-        cols=len(df.columns)
-    )
+    if not summary_df.empty:
 
-    table.style = "Table Grid"
-
-    hdr = table.rows[0].cells
-
-    for i, column in enumerate(
-        df.columns
-    ):
-
-        hdr[i].text = str(
-            column
+        table = document.add_table(
+            rows=1,
+            cols=len(summary_df.columns)
         )
 
-    for _, row in df.iterrows():
+        table.style = "Table Grid"
 
-        cells = table.add_row().cells
+        header_cells = table.rows[0].cells
 
-        for i, value in enumerate(
-            row
-        ):
+        for j, column in enumerate(summary_df.columns):
+            header_cells[j].text = str(column)
 
-            if pd.isna(value):
-                text = "—"
-            else:
-                text = str(value)
+        for _, row in summary_df.iterrows():
 
-            cells[i].text = text
+            cells = table.add_row().cells
 
-    # -----------------------------------------------------
-    # DETAILED REACTOR RESULTS
-    # -----------------------------------------------------
+            for j, value in enumerate(row):
+                cells[j].text = _fmt(value)
+
+    else:
+
+        document.add_paragraph(
+            "No reactor calculation data available."
+        )
+
+    # --------------------------------------------------------
+    # INDIVIDUAL REACTOR DETAILS
+    # --------------------------------------------------------
 
     document.add_heading(
-        "3. Detailed Engineering Results",
+        "3. Reactor Design Details",
         level=1
     )
 
-    for r in reactors:
+    for i, reactor in enumerate(reactors, start=1):
+
+        reactor_name = _get(
+            reactor,
+            "name",
+            "reactor_name",
+            default=f"Reactor {i}"
+        )
 
         document.add_heading(
-            f"{r.get('name')} Reactor",
+            str(reactor_name),
             level=2
         )
 
-        results = [
+        details = [
             (
                 "Working Volume",
-                r.get("working_volume"),
-                "m3"
+                _get(
+                    reactor,
+                    "volume_m3",
+                    "working_volume_m3"
+                ),
+                "m³"
             ),
             (
-                "Vessel Capacity",
-                r.get("vessel_volume"),
-                "m3"
+                "Vessel Volume",
+                _get(
+                    reactor,
+                    "vessel_volume_m3",
+                    "total_volume_m3"
+                ),
+                "m³"
             ),
             (
                 "Tank Diameter",
-                r.get("tank_diameter_m"),
+                _get(
+                    reactor,
+                    "tank_diameter_m",
+                    "diameter_m",
+                    "D"
+                ),
                 "m"
             ),
             (
                 "Liquid Height",
-                r.get("liquid_height_m"),
+                _get(
+                    reactor,
+                    "liquid_height_m",
+                    "HL"
+                ),
                 "m"
             ),
             (
-                "Impeller Diameter",
-                r.get("impeller_diameter_m"),
-                "m"
-            ),
-            (
-                "Agitator Speed",
-                r.get("rpm"),
+                "RPM",
+                _get(
+                    reactor,
+                    "rpm",
+                    "speed_rpm",
+                    "N"
+                ),
                 "RPM"
             ),
             (
+                "Impeller Diameter",
+                _get(
+                    reactor,
+                    "impeller_diameter_m",
+                    "Di"
+                ),
+                "m"
+            ),
+            (
+                "Number of Impellers",
+                _get(
+                    reactor,
+                    "number_impellers",
+                    "impellers"
+                ),
+                "-"
+            ),
+            (
                 "Power",
-                r.get("power_kw"),
+                _get(
+                    reactor,
+                    "power_kw",
+                    "shaft_power_kw"
+                ),
                 "kW"
             ),
             (
                 "P/V",
-                r.get("power_volume_kw_m3"),
-                "kW/m3"
+                _get(
+                    reactor,
+                    "power_volume_kw_m3",
+                    "P_V_kW_m3"
+                ),
+                "kW/m³"
+            ),
+            (
+                "P/V",
+                _get(
+                    reactor,
+                    "power_volume_w_m3",
+                    "P_V_W_m3"
+                ),
+                "W/m³"
             ),
             (
                 "Tip Speed",
-                r.get("tip_speed"),
+                _get(
+                    reactor,
+                    "tip_speed_m_s",
+                    "tip_speed"
+                ),
                 "m/s"
             ),
             (
                 "Reynolds Number",
-                r.get("Re"),
+                _get(
+                    reactor,
+                    "reynolds_number",
+                    "Re"
+                ),
                 "-"
             ),
             (
                 "Froude Number",
-                r.get("Fr"),
+                _get(
+                    reactor,
+                    "froude_number",
+                    "Fr"
+                ),
                 "-"
             ),
             (
                 "Pumping Capacity",
-                r.get("pumping_m3_h"),
-                "m3/h"
+                _get(
+                    reactor,
+                    "pumping_capacity_m3_h",
+                    "pumping_rate_m3_h"
+                ),
+                "m³/h"
             ),
             (
-                "Q/V",
-                r.get("qv_1_h"),
+                "Turnover",
+                _get(
+                    reactor,
+                    "turnover_1_h",
+                    "turnover_rate_1_h"
+                ),
                 "1/h"
             ),
             (
-                "Turnover Time",
-                r.get("turnover_time_min"),
-                "min"
-            ),
-            (
-                "Bubble Residence Time",
-                r.get(
-                    "bubble_residence_time_min"
+                "Njs",
+                _get(
+                    reactor,
+                    "njs_rpm",
+                    "Njs"
                 ),
-                "min"
+                "RPM"
             ),
             (
                 "kLa",
-                r.get("kLa_1_h"),
+                _get(
+                    reactor,
+                    "kLa_1_h",
+                    "kla_1_h",
+                    "kla"
+                ),
                 "1/h"
             ),
         ]
@@ -336,709 +536,585 @@ def create_word_report(
 
         table.style = "Table Grid"
 
-        table.rows[0].cells[0].text = (
-            "Parameter"
-        )
+        table.rows[0].cells[0].text = "Parameter"
+        table.rows[0].cells[1].text = "Value"
+        table.rows[0].cells[2].text = "Unit"
 
-        table.rows[0].cells[1].text = (
-            "Value"
-        )
+        for parameter, value, unit in details:
 
-        table.rows[0].cells[2].text = (
-            "Unit"
-        )
+            cells = table.add_row().cells
 
-        for parameter, value, unit in results:
+            cells[0].text = str(parameter)
+            cells[1].text = _fmt(value)
+            cells[2].text = str(unit)
 
-            row = table.add_row().cells
+        document.add_paragraph("")
 
-            row[0].text = parameter
-
-            if value is None:
-                row[1].text = "—"
-            else:
-                try:
-                    row[1].text = f"{float(value):.4f}"
-                except (TypeError, ValueError):
-                    row[1].text = str(value)
-
-            row[2].text = unit
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # SCALE-UP
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    if scaleup_result:
+    if scaleup_result is not None:
 
         document.add_heading(
             "4. Scale-Up Assessment",
             level=1
         )
 
-        table = document.add_table(
-            rows=1,
-            cols=2
-        )
+        if isinstance(scaleup_result, dict):
 
-        table.style = "Table Grid"
-
-        table.rows[0].cells[0].text = (
-            "Parameter"
-        )
-
-        table.rows[0].cells[1].text = (
-            "Result"
-        )
-
-        scale_items = [
-            (
-                "Scale-Up Basis",
-                scaleup_result.get("basis")
-            ),
-            (
-                "Target RPM",
-                scaleup_result.get(
-                    "target_rpm"
-                )
-            ),
-            (
-                "Target Tip Speed",
-                scaleup_result.get(
-                    "target_tip_speed"
-                )
-            ),
-            (
-                "Target P/V",
-                scaleup_result.get(
-                    "target_power_volume_kw_m3"
-                )
-            ),
-            (
-                "Engineering Message",
-                scaleup_result.get(
-                    "message"
-                )
-            ),
-        ]
-
-        for parameter, value in scale_items:
-
-            row = table.add_row().cells
-
-            row[0].text = parameter
-
-            row[1].text = (
-                "—"
-                if value is None
-                else str(value)
+            table = document.add_table(
+                rows=1,
+                cols=3
             )
 
-    # -----------------------------------------------------
-    # VALIDATION
-    # -----------------------------------------------------
+            table.style = "Table Grid"
 
-    document.add_heading(
-        "5. Engineering Validation",
-        level=1
-    )
+            table.rows[0].cells[0].text = "Parameter"
+            table.rows[0].cells[1].text = "Value"
+            table.rows[0].cells[2].text = "Unit"
 
-    for r in reactors:
+            for key, value in scaleup_result.items():
 
-        validation = r.get(
-            "validation",
-            {}
-        )
+                cells = table.add_row().cells
 
-        document.add_heading(
-            f"{r.get('name')} Validation",
-            level=2
-        )
+                cells[0].text = str(key)
 
-        document.add_paragraph(
-            f"Overall Status: "
-            f"{validation.get('overall', 'REVIEW')}"
-        )
+                if isinstance(value, (int, float)):
+                    cells[1].text = _fmt(value)
+                else:
+                    cells[1].text = str(value)
 
-        for check in validation.get(
-            "checks",
-            []
-        ):
+                cells[2].text = "-"
+
+        else:
 
             document.add_paragraph(
-                f"{check.get('severity')}: "
-                f"{check.get('message')}",
-                style="List Bullet"
+                str(scaleup_result)
             )
 
-    # -----------------------------------------------------
-    # ASSUMPTIONS
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # ENGINEERING NOTES
+    # --------------------------------------------------------
 
     document.add_heading(
-        "6. Engineering Assumptions & Limitations",
+        "5. Engineering Notes",
         level=1
     )
 
-    assumptions = [
-        "Agitator Np and Nq values are representative screening values.",
-        "Actual impeller geometry may require manufacturer-specific Np/Nq data.",
-        "Njs requires a validated solids-suspension correlation.",
-        "Blend time requires an appropriate mixing correlation or experimental data.",
-        "Gas-liquid kLa is a preliminary estimate and must be validated.",
-        "Bubble residence time is based on a simplified bubble-rise model.",
-        "Torispherical and vessel-head geometry is preliminary and should be checked against the actual vessel standard.",
-        "Mechanical shaft, gearbox, bearing and motor design are not included.",
-        "CFD is not represented by the current 3D visualization.",
-        "Final equipment design requires detailed process, mechanical and safety review.",
-    ]
+    document.add_paragraph(
+        "The calculated results should be reviewed against "
+        "process-specific operating requirements, laboratory "
+        "or pilot-scale data, equipment vendor information and "
+        "applicable engineering design standards before final "
+        "equipment specification."
+    )
 
-    for item in assumptions:
+    document.add_paragraph(
+        "Particular attention should be given to agitator "
+        "power, P/V, tip speed, suspension performance, "
+        "gas dispersion, Njs, heat-transfer requirements and "
+        "mechanical limitations during scale-up."
+    )
 
-        document.add_paragraph(
-            item,
-            style="List Bullet"
-        )
+    # --------------------------------------------------------
+    # DISCLAIMER
+    # --------------------------------------------------------
 
-    # -----------------------------------------------------
-    # SAVE
-    # -----------------------------------------------------
+    document.add_heading(
+        "6. Disclaimer",
+        level=1
+    )
+
+    document.add_paragraph(
+        "This report is intended for engineering study and "
+        "preliminary design purposes. Final equipment design, "
+        "mechanical design, agitator selection and process "
+        "validation should be confirmed by qualified engineers "
+        "and equipment vendors."
+    )
+
+    # --------------------------------------------------------
+    # SAVE TO MEMORY
+    # --------------------------------------------------------
 
     output = BytesIO()
 
-    document.save(
-        output
-    )
+    document.save(output)
 
     output.seek(0)
 
     return output
 
 
-# =========================================================
+# ============================================================
 # EXCEL REPORT
-# =========================================================
+# ============================================================
 
 def create_excel_report(
-    project_name,
-    prepared_by,
-    process_type,
-    study_mode,
-    scaleup_basis,
-    reactors,
+    project_name="Reactor Scale-Up Study",
+    prepared_by="",
+    process_type="",
+    study_mode="",
+    scaleup_basis="",
+    reactors=None,
     scaleup_result=None,
 ):
+    """
+    Generate a professional Excel report.
+
+    Returns
+    -------
+    BytesIO
+        Excel workbook stored in memory.
+    """
+
+    if reactors is None:
+        reactors = []
 
     workbook = Workbook()
 
-    # =====================================================
-    # SUMMARY
-    # =====================================================
+    # --------------------------------------------------------
+    # SUMMARY SHEET
+    # --------------------------------------------------------
 
-    ws = workbook.active
+    ws_summary = workbook.active
+    ws_summary.title = "Summary"
 
-    ws.title = "Summary"
-
-    ws["A1"] = (
-        "Reactor Scale-Up Engineering Report"
-    )
-
-    ws["A1"].font = Font(
+    ws_summary["A1"] = "REACTOR SCALE-UP ENGINEERING REPORT"
+    ws_summary["A1"].font = Font(
         bold=True,
         size=16
     )
 
-    metadata = [
-        ("Project", project_name),
-        ("Prepared By", prepared_by),
-        ("Process Type", process_type),
-        ("Study Mode", study_mode),
-        ("Scale-Up Basis", scaleup_basis),
-        (
-            "Generated",
-            datetime.now().strftime(
-                "%d-%m-%Y %H:%M"
-            )
-        ),
-    ]
+    ws_summary["A3"] = "Project"
+    ws_summary["B3"] = _safe(project_name)
 
-    row = 3
+    ws_summary["A4"] = "Prepared By"
+    ws_summary["B4"] = _safe(prepared_by)
 
-    for key, value in metadata:
+    ws_summary["A5"] = "Process Type"
+    ws_summary["B5"] = _safe(process_type)
 
-        ws.cell(
-            row=row,
-            column=1,
-            value=key
-        )
+    ws_summary["A6"] = "Study Mode"
+    ws_summary["B6"] = _safe(study_mode)
 
-        ws.cell(
-            row=row,
-            column=2,
-            value=value
-        )
+    ws_summary["A7"] = "Scale-Up Basis"
+    ws_summary["B7"] = _safe(scaleup_basis)
 
-        ws.cell(
-            row=row,
-            column=1
-        ).font = Font(
-            bold=True
-        )
-
-        row += 1
-
-    # =====================================================
-    # REACTOR SUMMARY
-    # =====================================================
-
-    row += 2
-
-    df = create_summary_dataframe(
-        reactors
+    ws_summary["A8"] = "Report Date"
+    ws_summary["B8"] = datetime.now().strftime(
+        "%d-%m-%Y %H:%M"
     )
 
-    for col_idx, column in enumerate(
-        df.columns,
-        start=1
-    ):
+    summary_df = create_summary_dataframe(reactors)
 
-        cell = ws.cell(
-            row=row,
-            column=col_idx,
-            value=column
-        )
+    if not summary_df.empty:
 
-        cell.font = Font(
-            bold=True
-        )
+        start_row = 11
 
-        cell.alignment = Alignment(
-            horizontal="center"
-        )
-
-    for r_idx, record in enumerate(
-        df.itertuples(index=False),
-        start=row + 1
-    ):
-
-        for c_idx, value in enumerate(
-            record,
+        for col_idx, column in enumerate(
+            summary_df.columns,
             start=1
         ):
 
-            ws.cell(
-                row=r_idx,
-                column=c_idx,
-                value=value
+            cell = ws_summary.cell(
+                row=start_row,
+                column=col_idx
             )
 
-    # =====================================================
-    # DETAILED RESULTS
-    # =====================================================
+            cell.value = column
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(
+                horizontal="center"
+            )
 
-    for reactor in reactors:
+        for row_idx, row in enumerate(
+            summary_df.itertuples(index=False),
+            start=start_row + 1
+        ):
 
-        sheet_name = str(
-            reactor.get("name", "Reactor")
-        )[:31]
+            for col_idx, value in enumerate(
+                row,
+                start=1
+            ):
 
-        detail = workbook.create_sheet(
-            sheet_name
+                ws_summary.cell(
+                    row=row_idx,
+                    column=col_idx,
+                    value=_safe(value, "")
+                )
+
+    # --------------------------------------------------------
+    # INDIVIDUAL REACTOR SHEETS
+    # --------------------------------------------------------
+
+    for i, reactor in enumerate(reactors, start=1):
+
+        reactor_name = _get(
+            reactor,
+            "name",
+            "reactor_name",
+            default=f"Reactor {i}"
         )
 
-        detail.append([
+        # Excel sheet names have restrictions.
+        sheet_name = f"Reactor {i}"
+
+        ws = workbook.create_sheet(
+            title=sheet_name
+        )
+
+        ws["A1"] = str(reactor_name)
+
+        ws["A1"].font = Font(
+            bold=True,
+            size=14
+        )
+
+        headers = [
             "Parameter",
             "Value",
-            "Unit",
-        ])
+            "Unit"
+        ]
 
-        for cell in detail[1]:
+        for col_idx, header in enumerate(
+            headers,
+            start=1
+        ):
 
-            cell.font = Font(
-                bold=True
+            cell = ws.cell(
+                row=3,
+                column=col_idx
             )
 
-        parameters = [
+            cell.value = header
+            cell.font = Font(bold=True)
+
+        details = [
             (
                 "Working Volume",
-                reactor.get(
-                    "working_volume"
+                _get(
+                    reactor,
+                    "volume_m3",
+                    "working_volume_m3"
                 ),
-                "m3"
+                "m³"
             ),
             (
-                "Vessel Capacity",
-                reactor.get(
-                    "vessel_volume"
+                "Vessel Volume",
+                _get(
+                    reactor,
+                    "vessel_volume_m3",
+                    "total_volume_m3"
                 ),
-                "m3"
+                "m³"
             ),
             (
                 "Tank Diameter",
-                reactor.get(
-                    "tank_diameter_m"
-                ),
-                "m"
-            ),
-            (
-                "Straight Height",
-                reactor.get(
-                    "straight_height_m"
+                _get(
+                    reactor,
+                    "tank_diameter_m",
+                    "diameter_m",
+                    "D"
                 ),
                 "m"
             ),
             (
                 "Liquid Height",
-                reactor.get(
-                    "liquid_height_m"
+                _get(
+                    reactor,
+                    "liquid_height_m",
+                    "HL"
                 ),
                 "m"
             ),
             (
-                "Agitator",
-                reactor.get(
-                    "agitator"
+                "RPM",
+                _get(
+                    reactor,
+                    "rpm",
+                    "speed_rpm",
+                    "N"
                 ),
-                "-"
+                "RPM"
             ),
             (
                 "Impeller Diameter",
-                reactor.get(
-                    "impeller_diameter_m"
+                _get(
+                    reactor,
+                    "impeller_diameter_m",
+                    "Di"
                 ),
                 "m"
             ),
             (
                 "Number of Impellers",
-                reactor.get(
-                    "number_impellers"
+                _get(
+                    reactor,
+                    "number_impellers",
+                    "impellers"
                 ),
                 "-"
             ),
             (
-                "RPM",
-                reactor.get(
-                    "rpm"
-                ),
-                "RPM"
-            ),
-            (
                 "Power",
-                reactor.get(
-                    "power_kw"
+                _get(
+                    reactor,
+                    "power_kw",
+                    "shaft_power_kw"
                 ),
                 "kW"
             ),
             (
                 "P/V",
-                reactor.get(
-                    "power_volume_kw_m3"
+                _get(
+                    reactor,
+                    "power_volume_kw_m3",
+                    "P_V_kW_m3"
                 ),
-                "kW/m3"
+                "kW/m³"
             ),
             (
                 "P/V",
-                reactor.get(
-                    "power_volume_w_m3"
+                _get(
+                    reactor,
+                    "power_volume_w_m3",
+                    "P_V_W_m3"
                 ),
-                "W/m3"
+                "W/m³"
             ),
             (
                 "Tip Speed",
-                reactor.get(
+                _get(
+                    reactor,
+                    "tip_speed_m_s",
                     "tip_speed"
                 ),
                 "m/s"
             ),
             (
                 "Reynolds Number",
-                reactor.get(
+                _get(
+                    reactor,
+                    "reynolds_number",
                     "Re"
                 ),
                 "-"
             ),
             (
                 "Froude Number",
-                reactor.get(
+                _get(
+                    reactor,
+                    "froude_number",
                     "Fr"
                 ),
                 "-"
             ),
             (
                 "Pumping Capacity",
-                reactor.get(
-                    "pumping_m3_h"
+                _get(
+                    reactor,
+                    "pumping_capacity_m3_h",
+                    "pumping_rate_m3_h"
                 ),
-                "m3/h"
+                "m³/h"
             ),
             (
-                "Q/V",
-                reactor.get(
-                    "qv_1_h"
+                "Turnover",
+                _get(
+                    reactor,
+                    "turnover_1_h",
+                    "turnover_rate_1_h"
                 ),
                 "1/h"
             ),
             (
-                "Turnover Time",
-                reactor.get(
-                    "turnover_time_min"
+                "Njs",
+                _get(
+                    reactor,
+                    "njs_rpm",
+                    "Njs"
                 ),
-                "min"
-            ),
-            (
-                "Gas Flow",
-                reactor.get(
-                    "gas_flow_m3_h"
-                ),
-                "m3/h"
-            ),
-            (
-                "Gas Superficial Velocity",
-                reactor.get(
-                    "gas_superficial_velocity_m_s"
-                ),
-                "m/s"
-            ),
-            (
-                "Bubble Diameter",
-                reactor.get(
-                    "bubble_diameter_m"
-                ),
-                "m"
-            ),
-            (
-                "Bubble Rise Velocity",
-                reactor.get(
-                    "bubble_rise_velocity_m_s"
-                ),
-                "m/s"
-            ),
-            (
-                "Bubble Residence Time",
-                reactor.get(
-                    "bubble_residence_time_min"
-                ),
-                "min"
-            ),
-            (
-                "Bubble Reynolds Number",
-                reactor.get(
-                    "bubble_reynolds"
-                ),
-                "-"
-            ),
-            (
-                "Schmidt Number",
-                reactor.get(
-                    "schmidt_number"
-                ),
-                "-"
-            ),
-            (
-                "Sherwood Number",
-                reactor.get(
-                    "sherwood_number"
-                ),
-                "-"
-            ),
-            (
-                "Liquid Mass Transfer Coefficient",
-                reactor.get(
-                    "kL_m_s"
-                ),
-                "m/s"
-            ),
-            (
-                "Interfacial Area",
-                reactor.get(
-                    "interfacial_area_m2_m3"
-                ),
-                "m2/m3"
+                "RPM"
             ),
             (
                 "kLa",
-                reactor.get(
-                    "kLa_1_h"
+                _get(
+                    reactor,
+                    "kLa_1_h",
+                    "kla_1_h",
+                    "kla"
                 ),
                 "1/h"
             ),
         ]
 
-        for item in parameters:
-
-            detail.append(
-                list(item)
-            )
-
-        # -------------------------------------------------
-        # Validation
-        # -------------------------------------------------
-
-        detail.append([])
-        detail.append([
-            "Validation",
-            reactor.get(
-                "validation",
-                {}
-            ).get(
-                "overall",
-                "REVIEW"
-            ),
-            "-"
-        ])
-
-        for check in reactor.get(
-            "validation",
-            {}
-        ).get(
-            "checks",
-            []
+        for row_idx, (
+            parameter,
+            value,
+            unit
+        ) in enumerate(
+            details,
+            start=4
         ):
 
-            detail.append([
-                check.get(
-                    "severity"
-                ),
-                check.get(
-                    "message"
-                ),
-                "-"
-            ])
-
-        # -------------------------------------------------
-        # Column width
-        # -------------------------------------------------
-
-        for column_cells in detail.columns:
-
-            max_length = 0
-
-            column_letter = (
-                get_column_letter(
-                    column_cells[0].column
-                )
+            ws.cell(
+                row=row_idx,
+                column=1,
+                value=parameter
             )
 
-            for cell in column_cells:
-
-                value = (
-                    ""
-                    if cell.value is None
-                    else str(cell.value)
-                )
-
-                max_length = max(
-                    max_length,
-                    len(value)
-                )
-
-            detail.column_dimensions[
-                column_letter
-            ].width = min(
-                max_length + 3,
-                45
+            ws.cell(
+                row=row_idx,
+                column=2,
+                value=_safe(value, "")
             )
 
-    # =====================================================
-    # SCALE-UP
-    # =====================================================
+            ws.cell(
+                row=row_idx,
+                column=3,
+                value=unit
+            )
 
-    if scaleup_result:
+    # --------------------------------------------------------
+    # SCALE-UP SHEET
+    # --------------------------------------------------------
+
+    if scaleup_result is not None:
 
         ws_scale = workbook.create_sheet(
-            "Scale-Up"
+            title="Scale-Up"
         )
 
-        ws_scale.append([
-            "Parameter",
-            "Value"
-        ])
+        ws_scale["A1"] = "SCALE-UP ASSESSMENT"
 
-        for cell in ws_scale[1]:
+        ws_scale["A1"].font = Font(
+            bold=True,
+            size=14
+        )
+
+        ws_scale["A3"] = "Parameter"
+        ws_scale["B3"] = "Value"
+        ws_scale["C3"] = "Unit"
+
+        for cell in ws_scale[3]:
 
             cell.font = Font(
                 bold=True
             )
 
-        scale_items = [
-            (
-                "Basis",
-                scaleup_result.get(
-                    "basis"
-                )
-            ),
-            (
-                "Target RPM",
-                scaleup_result.get(
-                    "target_rpm"
-                )
-            ),
-            (
-                "Target Tip Speed",
-                scaleup_result.get(
-                    "target_tip_speed"
-                )
-            ),
-            (
-                "Target P/V",
-                scaleup_result.get(
-                    "target_power_volume_kw_m3"
-                )
-            ),
-            (
-                "Message",
-                scaleup_result.get(
-                    "message"
-                )
-            ),
-        ]
+        if isinstance(scaleup_result, dict):
 
-        for item in scale_items:
+            row = 4
 
-            ws_scale.append(
-                list(item)
+            for key, value in scaleup_result.items():
+
+                ws_scale.cell(
+                    row=row,
+                    column=1,
+                    value=str(key)
+                )
+
+                ws_scale.cell(
+                    row=row,
+                    column=2,
+                    value=_safe(value, "")
+                )
+
+                ws_scale.cell(
+                    row=row,
+                    column=3,
+                    value="-"
+                )
+
+                row += 1
+
+        else:
+
+            ws_scale["A4"] = str(
+                scaleup_result
             )
 
-    # =====================================================
-    # COLUMN WIDTH
-    # =====================================================
+    # --------------------------------------------------------
+    # ENGINEERING NOTES
+    # --------------------------------------------------------
 
-    for worksheet in workbook.worksheets:
+    ws_notes = workbook.create_sheet(
+        title="Engineering Notes"
+    )
 
-        for column_cells in worksheet.columns:
+    ws_notes["A1"] = "ENGINEERING NOTES"
 
-            max_length = 0
+    ws_notes["A1"].font = Font(
+        bold=True,
+        size=14
+    )
 
-            column_letter = (
-                get_column_letter(
+    notes = [
+        "Review reactor geometry against actual equipment drawings.",
+        "Confirm agitator selection with the agitator vendor.",
+        "Check P/V and tip speed against process requirements.",
+        "Check solids suspension and Njs where applicable.",
+        "For gas-liquid systems, validate gas dispersion and kLa.",
+        "Confirm heat-transfer requirements independently.",
+        "Final mechanical design must be completed separately.",
+        "Use pilot or plant data wherever available for scale-up validation.",
+    ]
+
+    for i, note in enumerate(
+        notes,
+        start=3
+    ):
+
+        ws_notes.cell(
+            row=i,
+            column=1,
+            value=note
+        )
+
+    # --------------------------------------------------------
+    # COLUMN WIDTHS
+    # --------------------------------------------------------
+
+    for ws in workbook.worksheets:
+
+        for column_cells in ws.columns:
+
+            try:
+
+                column_letter = get_column_letter(
                     column_cells[0].column
                 )
-            )
 
-            for cell in column_cells:
+                max_length = 0
 
-                value = (
-                    ""
-                    if cell.value is None
-                    else str(cell.value)
+                for cell in column_cells:
+
+                    if cell.value is not None:
+
+                        max_length = max(
+                            max_length,
+                            len(str(cell.value))
+                        )
+
+                ws.column_dimensions[
+                    column_letter
+                ].width = min(
+                    max(max_length + 2, 12),
+                    40
                 )
 
-                max_length = max(
-                    max_length,
-                    len(value)
-                )
+            except Exception:
+                pass
 
-            worksheet.column_dimensions[
-                column_letter
-            ].width = min(
-                max_length + 3,
-                45
-            )
+    # --------------------------------------------------------
+    # SAVE
+    # --------------------------------------------------------
 
     output = BytesIO()
 
-    workbook.save(
-        output
-    )
+    workbook.save(output)
 
     output.seek(0)
 
