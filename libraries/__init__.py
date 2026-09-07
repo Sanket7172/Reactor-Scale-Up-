@@ -1,1 +1,1 @@
-# Package initialization
+# Engineering libraries package
