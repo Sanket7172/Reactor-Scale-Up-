@@ -9,7 +9,7 @@ from libraries.reactor_geometry import (
 
 
 # =========================================================
-# IMPeller geometry
+# IMPeller TRACE
 # =========================================================
 
 def _impeller_trace(
@@ -26,24 +26,20 @@ def _impeller_trace(
     zz = []
 
     # -----------------------------------------------------
-    # Rushton Turbine
+    # Rushton
     # -----------------------------------------------------
 
     if agitator == "Rushton Turbine":
 
         disk_r = radius * 0.75
 
-        # Disk
-        disk_points = 50
+        theta = np.linspace(
+            0,
+            2 * math.pi,
+            60
+        )
 
-        for i in range(disk_points):
-
-            angle = (
-                2.0 *
-                math.pi *
-                i /
-                (disk_points - 1)
-            )
+        for angle in theta:
 
             x.append(
                 disk_r *
@@ -57,403 +53,119 @@ def _impeller_trace(
 
             zz.append(z)
 
-        x.append(None)
-        y.append(None)
-        zz.append(None)
+        x += [None]
+        y += [None]
+        zz += [None]
 
-        # Blades
         for i in range(blades):
 
             angle = (
-                2.0 *
+                2 *
                 math.pi *
                 i /
                 blades
             )
 
-            x.extend([
-                radius * 0.20 * math.cos(angle),
-                radius * 0.95 * math.cos(angle),
-                None,
-            ])
-
-            y.extend([
-                radius * 0.20 * math.sin(angle),
-                radius * 0.95 * math.sin(angle),
-                None,
-            ])
-
-            zz.extend([
-                z,
-                z,
-                None,
-            ])
-
-    # -----------------------------------------------------
-    # Pitched Blade Turbine
-    # -----------------------------------------------------
-
-    elif agitator == "Pitched Blade Turbine":
-
-        for i in range(blades):
-
-            angle = (
-                2.0 *
-                math.pi *
-                i /
-                blades
-            )
-
-            x1 = (
-                radius *
-                0.12 *
-                math.cos(angle)
-            )
-
-            y1 = (
-                radius *
-                0.12 *
-                math.sin(angle)
-            )
-
-            x2 = (
-                radius *
-                math.cos(angle)
-            )
-
-            y2 = (
-                radius *
-                math.sin(angle)
-            )
-
-            x.extend([
-                x1,
-                x2,
-                None,
-            ])
-
-            y.extend([
-                y1,
-                y2,
-                None,
-            ])
-
-            zz.extend([
-                z,
-                z,
-                None,
-            ])
-
-    # -----------------------------------------------------
-    # Hydrofoil
-    # -----------------------------------------------------
-
-    elif agitator == "Hydrofoil":
-
-        for i in range(blades):
-
-            angle = (
-                2.0 *
-                math.pi *
-                i /
-                blades
-            )
-
-            # Root
-            x.extend([
-                radius * 0.10 * math.cos(angle),
-                radius * math.cos(angle),
-                None,
-            ])
-
-            y.extend([
-                radius * 0.10 * math.sin(angle),
-                radius * math.sin(angle),
-                None,
-            ])
-
-            zz.extend([
-                z,
-                z,
-                None,
-            ])
-
-    # -----------------------------------------------------
-    # Marine Propeller
-    # -----------------------------------------------------
-
-    elif agitator == "Marine Propeller":
-
-        for i in range(blades):
-
-            angle = (
-                2.0 *
-                math.pi *
-                i /
-                blades
-            )
-
-            x.extend([
-                0.0,
-                radius *
+            x += [
+                radius * 0.2 *
                 math.cos(angle),
-                None,
-            ])
 
-            y.extend([
-                0.0,
-                radius *
+                radius * 0.95 *
+                math.cos(angle),
+
+                None
+            ]
+
+            y += [
+                radius * 0.2 *
                 math.sin(angle),
-                None,
-            ])
 
-            zz.extend([
+                radius * 0.95 *
+                math.sin(angle),
+
+                None
+            ]
+
+            zz += [
                 z,
                 z,
-                None,
-            ])
+                None
+            ]
 
     # -----------------------------------------------------
-    # Anchor
+    # Generic radial/axial blade representation
     # -----------------------------------------------------
 
-    elif agitator == "Anchor":
-
-        points = 80
-
-        for i in range(points):
-
-            angle = (
-                2.0 *
-                math.pi *
-                i /
-                (points - 1)
-            )
-
-            x.append(
-                radius *
-                0.88 *
-                math.cos(angle)
-            )
-
-            y.append(
-                radius *
-                0.88 *
-                math.sin(angle)
-            )
-
-            zz.append(z)
-
-        x.append(None)
-        y.append(None)
-        zz.append(None)
-
-        # Vertical section
-        x.extend([
-            -radius * 0.88,
-            -radius * 0.88,
-            None,
-        ])
-
-        y.extend([
-            0.0,
-            0.0,
-            None,
-        ])
-
-        zz.extend([
-            z,
-            z + D * 0.45,
-            None,
-        ])
-
-    # -----------------------------------------------------
-    # Helical Ribbon
-    # -----------------------------------------------------
-
-    elif agitator == "Helical Ribbon":
-
-        points = 160
-
-        for i in range(points):
-
-            angle = (
-                4.0 *
-                math.pi *
-                i /
-                (points - 1)
-            )
-
-            x.append(
-                radius *
-                0.90 *
-                math.cos(angle)
-            )
-
-            y.append(
-                radius *
-                0.90 *
-                math.sin(angle)
-            )
-
-            zz.append(
-                z -
-                D * 0.35 +
-                D * 0.70 *
-                i /
-                (points - 1)
-            )
-
-    # -----------------------------------------------------
-    # RCI
-    # -----------------------------------------------------
-
-    elif agitator == "RCI":
+    else:
 
         for i in range(blades):
 
             angle = (
-                2.0 *
+                2 *
                 math.pi *
                 i /
                 blades
             )
 
-            x.extend([
-                radius * 0.15 *
+            x += [
+                radius * 0.12 *
                 math.cos(angle),
 
                 radius *
                 math.cos(angle),
 
-                None,
-            ])
+                None
+            ]
 
-            y.extend([
-                radius * 0.15 *
+            y += [
+                radius * 0.12 *
                 math.sin(angle),
 
                 radius *
                 math.sin(angle),
 
-                None,
-            ])
+                None
+            ]
 
-            zz.extend([
+            zz += [
                 z,
                 z,
-                None,
-            ])
+                None
+            ]
 
     return x, y, zz
 
 
 # =========================================================
-# CREATE REACTOR ANIMATION
+# CREATE 3D REACTOR
 # =========================================================
 
 def create_reactor_animation(
-    D=None,
-    straight_height=None,
-    bottom_type="Flat Bottom",
-    top_type="Flat Bottom",
-    liquid_height=None,
-    impeller_diameter=None,
-    impeller_clearance=0.10,
+    D,
+    straight_height,
+    bottom_type,
+    top_type,
+    liquid_height,
+    agitator,
+    impeller_diameter,
     number_impellers=1,
-    agitator="Pitched Blade Turbine",
-    number_baffles=4,
     rpm=120,
+    number_baffles=4,
+    vortex_depth=0.0,
     frames_count=36,
-
-    # -----------------------------------------------------
-    # Additional compatibility arguments
-    # -----------------------------------------------------
-
-    tank_id_m=None,
-    tank_height_m=None,
-    liquid_level_m=None,
-    impeller_diameter_m=None,
-    impeller_clearance_m=None,
-    n_impellers=None,
-    n_baffles=None,
-
-    **kwargs,
 ):
-
-    # =====================================================
-    # ARGUMENT COMPATIBILITY
-    # =====================================================
-
-    if D is None:
-        D = tank_id_m
-
-    if straight_height is None:
-        straight_height = tank_height_m
-
-    if liquid_height is None:
-        liquid_height = liquid_level_m
-
-    if impeller_diameter is None:
-        impeller_diameter = impeller_diameter_m
-
-    if impeller_clearance_m is not None:
-        impeller_clearance = impeller_clearance_m
-
-    if n_impellers is not None:
-        number_impellers = n_impellers
-
-    if n_baffles is not None:
-        number_baffles = n_baffles
-
-    # =====================================================
-    # SAFETY DEFAULTS
-    # =====================================================
-
-    if D is None:
-        D = 2.0
-
-    if straight_height is None:
-        straight_height = 2.5
-
-    if liquid_height is None:
-        liquid_height = straight_height * 0.70
-
-    if impeller_diameter is None:
-        impeller_diameter = D * 0.40
-
-    if impeller_clearance is None:
-        impeller_clearance = D * 0.10
-
-    if number_impellers is None:
-        number_impellers = 1
-
-    if number_baffles is None:
-        number_baffles = 4
-
-    if frames_count is None:
-        frames_count = 36
-
-    frames_count = max(
-        1,
-        int(frames_count)
-    )
-
-    # =====================================================
-    # VESSEL PROFILE
-    # =====================================================
 
     z_profile, r_profile = profile(
         D,
         straight_height,
         bottom_type,
         top_type,
-        n_points=220,
+        n_points=240,
     )
 
     theta = np.linspace(
-        0.0,
-        2.0 * math.pi,
+        0,
+        2 * math.pi,
         80
     )
 
@@ -467,13 +179,20 @@ def create_reactor_animation(
         (len(theta), 1)
     )
 
-    X = R * np.cos(TH)
-    Y = R * np.sin(TH)
+    X = (
+        R *
+        np.cos(TH)
+    )
+
+    Y = (
+        R *
+        np.sin(TH)
+    )
 
     fig = go.Figure()
 
     # =====================================================
-    # REACTOR VESSEL
+    # VESSEL
     # =====================================================
 
     fig.add_trace(
@@ -481,11 +200,11 @@ def create_reactor_animation(
             x=X,
             y=Y,
             z=Z,
-            opacity=0.22,
+            opacity=0.18,
             showscale=False,
-            name="Reactor Vessel",
+            name="Vessel",
             hovertemplate=(
-                "Reactor Vessel"
+                "Reactor vessel"
                 "<extra></extra>"
             ),
         )
@@ -512,8 +231,8 @@ def create_reactor_animation(
     )
 
     liquid_theta = np.linspace(
-        0.0,
-        2.0 * math.pi,
+        0,
+        2 * math.pi,
         80
     )
 
@@ -537,9 +256,7 @@ def create_reactor_animation(
             ),
             mode="lines",
             name="Liquid Level",
-            line=dict(
-                width=5
-            ),
+            line=dict(width=5),
         )
     )
 
@@ -547,17 +264,12 @@ def create_reactor_animation(
     # LIQUID BODY
     # =====================================================
 
-    liquid_mask = (
+    mask = (
         z_profile <= liquid_z
     )
 
-    zl = z_profile[
-        liquid_mask
-    ]
-
-    rl = r_profile[
-        liquid_mask
-    ]
+    zl = z_profile[mask]
+    rl = r_profile[mask]
 
     if len(zl) >= 2:
 
@@ -571,15 +283,22 @@ def create_reactor_animation(
             (len(theta), 1)
         )
 
-        XL = RL * np.cos(THL)
-        YL = RL * np.sin(THL)
+        XL = (
+            RL *
+            np.cos(THL)
+        )
+
+        YL = (
+            RL *
+            np.sin(THL)
+        )
 
         fig.add_trace(
             go.Surface(
                 x=XL,
                 y=YL,
                 z=ZL,
-                opacity=0.10,
+                opacity=0.08,
                 showscale=False,
                 name="Liquid",
                 hoverinfo="skip",
@@ -591,7 +310,7 @@ def create_reactor_animation(
     # =====================================================
 
     shaft_z = np.linspace(
-        0.0,
+        0,
         z_profile[-1],
         100
     )
@@ -607,9 +326,7 @@ def create_reactor_animation(
             z=shaft_z,
             mode="lines",
             name="Shaft",
-            line=dict(
-                width=8
-            ),
+            line=dict(width=8),
         )
     )
 
@@ -617,26 +334,22 @@ def create_reactor_animation(
     # BAFFLES
     # =====================================================
 
-    if int(number_baffles) > 0:
-
-        baffle_count = int(
-            number_baffles
-        )
+    if number_baffles > 0:
 
         baffle_r = (
             D / 2.0 -
-            D * 0.05
+            D * 0.04
         )
 
         for i in range(
-            baffle_count
+            int(number_baffles)
         ):
 
             angle = (
-                2.0 *
+                2 *
                 math.pi *
                 i /
-                baffle_count
+                number_baffles
             )
 
             bx = (
@@ -651,58 +364,32 @@ def create_reactor_animation(
 
             fig.add_trace(
                 go.Scatter3d(
-                    x=[
-                        bx,
-                        bx
-                    ],
-                    y=[
-                        by,
-                        by
-                    ],
-                    z=[
-                        0.0,
-                        liquid_z
-                    ],
+                    x=[bx, bx],
+                    y=[by, by],
+                    z=[0, liquid_z],
                     mode="lines",
                     name="Baffle",
-                    showlegend=(
-                        i == 0
-                    ),
-                    line=dict(
-                        width=7
-                    ),
+                    showlegend=i == 0,
+                    line=dict(width=7),
                 )
             )
 
     # =====================================================
-    # IMPELLER BLADE COUNT
+    # IMPELLERS
     # =====================================================
 
-    blade_library = {
-
+    blade_count = {
         "Rushton Turbine": 6,
-
         "Pitched Blade Turbine": 4,
-
         "Hydrofoil": 3,
-
         "Marine Propeller": 3,
-
         "Anchor": 2,
-
         "Helical Ribbon": 1,
-
         "RCI": 2,
-    }
-
-    blades = blade_library.get(
+    }.get(
         agitator,
         4
     )
-
-    # =====================================================
-    # IMPELLER POSITIONS
-    # =====================================================
 
     nimp = max(
         1,
@@ -711,44 +398,27 @@ def create_reactor_animation(
 
     clearance = max(
         0.0,
-        float(impeller_clearance)
-    )
-
-    usable_height = max(
-        liquid_z -
-        clearance -
-        0.15 * D,
-        0.20 * D
+        float(vortex_depth)
     )
 
     if nimp == 1:
 
         positions = [
-            clearance
+            min(
+                liquid_z * 0.25,
+                liquid_z
+            )
         ]
 
     else:
 
-        positions = []
+        positions = np.linspace(
+            liquid_z * 0.20,
+            liquid_z * 0.80,
+            nimp
+        )
 
-        for i in range(nimp):
-
-            frac = (
-                i /
-                (nimp - 1)
-            )
-
-            positions.append(
-                clearance +
-                frac *
-                usable_height
-            )
-
-    # =====================================================
-    # DRAW IMPELLERS
-    # =====================================================
-
-    for idx, z_imp in enumerate(
+    for i, z_imp in enumerate(
         positions
     ):
 
@@ -756,7 +426,7 @@ def create_reactor_animation(
             impeller_diameter,
             z_imp,
             agitator,
-            blades,
+            blade_count,
         )
 
         fig.add_trace(
@@ -765,45 +435,29 @@ def create_reactor_animation(
                 y=iy,
                 z=iz,
                 mode="lines",
-                name=(
-                    f"Impeller {idx + 1}"
-                ),
-                line=dict(
-                    width=6
-                ),
+                name=f"Impeller {i + 1}",
+                line=dict(width=6),
             )
         )
 
     # =====================================================
-    # MIXING PARTICLES
+    # MIXING TRACERS
     # =====================================================
 
     rng = np.random.default_rng(
         42
     )
 
-    n_particles = 100
-
-    particle_z = (
-        rng.random(
-            n_particles
-        )
-        *
-        max(
-            liquid_z,
-            0.05
-        )
-    )
+    n_particles = 120
 
     particle_r = (
         np.sqrt(
             rng.random(
                 n_particles
             )
-        )
-        *
+        ) *
         max(
-            liquid_radius * 0.82,
+            liquid_radius * 0.80,
             D * 0.03
         )
     )
@@ -811,100 +465,97 @@ def create_reactor_animation(
     particle_angle = (
         rng.random(
             n_particles
-        )
-        *
-        2.0 *
+        ) *
+        2 *
         math.pi
     )
 
-    particle_x = (
+    particle_z = (
+        rng.random(
+            n_particles
+        ) *
+        liquid_z
+    )
+
+    px = (
         particle_r *
         np.cos(particle_angle)
     )
 
-    particle_y = (
+    py = (
         particle_r *
         np.sin(particle_angle)
     )
 
-    particle_trace_index = (
-        len(fig.data)
+    particle_trace = len(
+        fig.data
     )
 
     fig.add_trace(
         go.Scatter3d(
-            x=particle_x,
-            y=particle_y,
+            x=px,
+            y=py,
             z=particle_z,
             mode="markers",
             name="Mixing Tracers",
             marker=dict(
                 size=3,
-                opacity=0.60,
+                opacity=0.55,
             ),
         )
     )
 
     # =====================================================
-    # ANIMATION FRAMES
+    # ANIMATION
     # =====================================================
 
     frames = []
 
-    for frame_no in range(
-        frames_count
+    for i in range(
+        max(1, int(frames_count))
     ):
 
         rotation = (
-            2.0 *
+            2 *
             math.pi *
-            frame_no /
-            frames_count
+            i /
+            max(1, frames_count)
         )
 
-        # Add a slight vertical circulation
-        # for visual representation
-        vertical_shift = (
-            0.04 *
-            D *
-            math.sin(
-                rotation * 2.0
-            )
-        )
-
-        angle_frame = (
+        angle = (
             particle_angle +
             rotation
         )
 
         fx = (
             particle_r *
-            np.cos(angle_frame)
+            np.cos(angle)
         )
 
         fy = (
             particle_r *
-            np.sin(angle_frame)
+            np.sin(angle)
         )
 
         fz = (
             particle_z +
-            vertical_shift *
+            0.03 *
+            D *
             np.sin(
-                particle_angle * 2.0
+                particle_angle * 2 +
+                rotation
             )
         )
 
         fz = np.clip(
             fz,
-            0.0,
+            0,
             liquid_z
         )
 
         frames.append(
             go.Frame(
-                name=str(frame_no),
-
+                name=str(i),
                 data=[
                     go.Scatter3d(
                         x=fx,
@@ -913,13 +564,12 @@ def create_reactor_animation(
                         mode="markers",
                         marker=dict(
                             size=3,
-                            opacity=0.60,
+                            opacity=0.55,
                         ),
                     )
                 ],
-
                 traces=[
-                    particle_trace_index
+                    particle_trace
                 ],
             )
         )
@@ -927,26 +577,20 @@ def create_reactor_animation(
     fig.frames = frames
 
     # =====================================================
-    # ANIMATION CONTROL
+    # CONTROLS
     # =====================================================
 
     fig.update_layout(
-
         updatemenus=[
             {
                 "type": "buttons",
                 "showactive": False,
-
                 "x": 0.02,
                 "y": 0.02,
-
                 "buttons": [
-
                     {
                         "label": "▶ Play",
-
                         "method": "animate",
-
                         "args": [
                             None,
                             {
@@ -955,27 +599,19 @@ def create_reactor_animation(
                                     "redraw": True,
                                 },
                                 "transition": {
-                                    "duration": 0
+                                    "duration": 0,
                                 },
-                                "fromcurrent": True,
                             },
                         ],
                     },
-
                     {
                         "label": "⏸ Pause",
-
                         "method": "animate",
-
                         "args": [
                             [None],
                             {
                                 "frame": {
                                     "duration": 0,
-                                    "redraw": False,
-                                },
-                                "transition": {
-                                    "duration": 0
                                 },
                             },
                         ],
@@ -989,9 +625,7 @@ def create_reactor_animation(
     # LAYOUT
     # =====================================================
 
-    total_height = (
-        z_profile[-1]
-    )
+    total_height = z_profile[-1]
 
     fig.update_layout(
 
@@ -1003,20 +637,9 @@ def create_reactor_animation(
 
         scene=dict(
 
-            xaxis=dict(
-                title="X (m)",
-                showbackground=False,
-            ),
-
-            yaxis=dict(
-                title="Y (m)",
-                showbackground=False,
-            ),
-
-            zaxis=dict(
-                title="Height (m)",
-                showbackground=False,
-            ),
+            xaxis_title="X (m)",
+            yaxis_title="Y (m)",
+            zaxis_title="Height (m)",
 
             aspectmode="manual",
 
@@ -1025,7 +648,8 @@ def create_reactor_animation(
                 y=1,
                 z=max(
                     1.2,
-                    total_height / max(D, 0.1)
+                    total_height /
+                    max(D, 0.1)
                 ),
             ),
 
@@ -1038,12 +662,12 @@ def create_reactor_animation(
             ),
         ),
 
-        height=700,
+        height=680,
 
         margin=dict(
             l=0,
             r=0,
-            t=60,
+            t=55,
             b=0,
         ),
 
@@ -1051,17 +675,12 @@ def create_reactor_animation(
             orientation="h",
             yanchor="bottom",
             y=1.01,
-            xanchor="left",
             x=0,
         ),
     )
 
     return fig
 
-
-# =========================================================
-# BACKWARD COMPATIBILITY
-# =========================================================
 
 def create_reactor_3d(**kwargs):
 
