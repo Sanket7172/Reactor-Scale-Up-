@@ -1,6 +1,18 @@
 # ============================================================
 # visualization/reactor_3d.py
-# Professional Parametric 3D Reactor Visualization
+# Advanced 3D Reactor Mixing Visualization
+#
+# Includes:
+#   - Parametric reactor geometry
+#   - Multiple impellers
+#   - 3D circulation field
+#   - Streamlines
+#   - Vortex/free-surface depression
+#   - Animated tracer particles
+#   - Impeller rotation indication
+#
+# NOTE:
+# This is a parametric engineering visualization, NOT CFD.
 # ============================================================
 
 import math
@@ -19,7 +31,10 @@ from libraries.reactor_geometry import (
 
 def _safe_float(value, default=0.0):
     try:
-        return float(value)
+        value = float(value)
+        if not np.isfinite(value):
+            return float(default)
+        return value
     except Exception:
         return float(default)
 
@@ -31,8 +46,13 @@ def _safe_int(value, default=1):
         return int(default)
 
 
+def _clamp(value, low, high):
+    return max(low, min(high, value))
+
+
 def _rotate_xy(x, y, angle):
-    """Rotate XY coordinates around the reactor shaft."""
+    """Rotate XY coordinates around reactor shaft."""
+
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
 
@@ -43,6 +63,95 @@ def _rotate_xy(x, y, angle):
     yr = x * sa + y * ca
 
     return xr, yr
+
+
+# ============================================================
+# IMPELLER FLOW CHARACTERISTICS
+# ============================================================
+
+def _impeller_flow_characteristics(agitator):
+    """
+    Returns approximate normalized flow characteristics.
+
+    axial:
+        axial pumping tendency
+
+    radial:
+        radial pumping tendency
+
+    swirl:
+        tangential flow tendency
+
+    circulation:
+        strength of bulk circulation
+
+    These are visualization coefficients only.
+    """
+
+    name = str(agitator).lower()
+
+    if "anchor" in name:
+        return {
+            "axial": 0.30,
+            "radial": 0.45,
+            "swirl": 0.80,
+            "circulation": 0.55,
+        }
+
+    if "rushton" in name:
+        return {
+            "axial": 0.15,
+            "radial": 1.00,
+            "swirl": 0.75,
+            "circulation": 0.65,
+        }
+
+    if "pitched" in name or "pbt" in name:
+        return {
+            "axial": 0.85,
+            "radial": 0.55,
+            "swirl": 0.65,
+            "circulation": 0.90,
+        }
+
+    if "hydrofoil" in name:
+        return {
+            "axial": 1.00,
+            "radial": 0.25,
+            "swirl": 0.35,
+            "circulation": 1.00,
+        }
+
+    if "marine" in name:
+        return {
+            "axial": 0.95,
+            "radial": 0.30,
+            "swirl": 0.55,
+            "circulation": 0.95,
+        }
+
+    if "helical" in name or "ribbon" in name:
+        return {
+            "axial": 0.75,
+            "radial": 0.40,
+            "swirl": 0.90,
+            "circulation": 0.85,
+        }
+
+    if "rci" in name:
+        return {
+            "axial": 0.35,
+            "radial": 0.90,
+            "swirl": 0.65,
+            "circulation": 0.70,
+        }
+
+    return {
+        "axial": 0.70,
+        "radial": 0.50,
+        "swirl": 0.55,
+        "circulation": 0.80,
+    }
 
 
 # ============================================================
@@ -58,9 +167,7 @@ def _box_mesh(
     height_z,
     angle=0.0,
 ):
-    """
-    Creates a rectangular solid and returns vertices/faces.
-    """
+    """Create rectangular solid."""
 
     lx = length_x / 2.0
     wy = width_y / 2.0
@@ -83,11 +190,19 @@ def _box_mesh(
     ca = math.cos(angle)
     sa = math.sin(angle)
 
-    x = vertices[:, 0] * ca - vertices[:, 1] * sa
-    y = vertices[:, 0] * sa + vertices[:, 1] * ca
+    x = (
+        vertices[:, 0] * ca
+        - vertices[:, 1] * sa
+    )
+
+    y = (
+        vertices[:, 0] * sa
+        + vertices[:, 1] * ca
+    )
 
     x += cx
     y += cy
+
     z = vertices[:, 2] + cz
 
     faces = [
@@ -130,9 +245,7 @@ def _add_mesh(
     showlegend=True,
     color="#B8C4CC",
 ):
-    """
-    Add shaded 3D solid.
-    """
+    """Add shaded 3D solid."""
 
     fig.add_trace(
         go.Mesh3d(
@@ -179,9 +292,7 @@ def _cylinder_mesh(
     center_x=0.0,
     center_y=0.0,
 ):
-    """
-    Generate cylindrical surface with top and bottom caps.
-    """
+    """Generate cylindrical solid."""
 
     theta = np.linspace(
         0,
@@ -190,30 +301,30 @@ def _cylinder_mesh(
         endpoint=False,
     )
 
-    x_bottom = (
-        center_x +
-        radius * np.cos(theta)
+    xb = (
+        center_x
+        + radius * np.cos(theta)
     )
 
-    y_bottom = (
-        center_y +
-        radius * np.sin(theta)
+    yb = (
+        center_y
+        + radius * np.sin(theta)
     )
 
-    x_top = (
-        center_x +
-        radius * np.cos(theta)
+    xt = (
+        center_x
+        + radius * np.cos(theta)
     )
 
-    y_top = (
-        center_y +
-        radius * np.sin(theta)
+    yt = (
+        center_y
+        + radius * np.sin(theta)
     )
 
     x = np.concatenate(
         [
-            x_bottom,
-            x_top,
+            xb,
+            xt,
             [center_x],
             [center_x],
         ]
@@ -221,8 +332,8 @@ def _cylinder_mesh(
 
     y = np.concatenate(
         [
-            y_bottom,
-            y_top,
+            yb,
+            yt,
             [center_y],
             [center_y],
         ]
@@ -239,31 +350,25 @@ def _cylinder_mesh(
 
     faces = []
 
-    # Side wall
     for n in range(segments):
 
         n2 = (n + 1) % segments
 
         faces.append(
-            (
-                n,
-                n2,
-                segments + n
-            )
+            (n, n2, segments + n)
         )
 
         faces.append(
             (
                 n2,
                 segments + n2,
-                segments + n
+                segments + n,
             )
         )
 
     bottom_center = 2 * segments
     top_center = 2 * segments + 1
 
-    # Bottom cap
     for n in range(segments):
 
         n2 = (n + 1) % segments
@@ -272,20 +377,15 @@ def _cylinder_mesh(
             (
                 bottom_center,
                 n2,
-                n
+                n,
             )
         )
-
-    # Top cap
-    for n in range(segments):
-
-        n2 = (n + 1) % segments
 
         faces.append(
             (
                 top_center,
                 segments + n,
-                segments + n2
+                segments + n2,
             )
         )
 
@@ -334,14 +434,7 @@ def _add_cylinder(
 # IMPELLER GEOMETRY
 # ============================================================
 
-def _anchor_geometry(
-    D,
-    z,
-    thickness=None,
-):
-    """
-    3D Anchor impeller.
-    """
+def _anchor_geometry(D, z, thickness=None):
 
     radius = D / 2.0
 
@@ -353,21 +446,19 @@ def _anchor_geometry(
 
     parts = []
 
-    # Bottom horizontal arm
-    arm_length = radius * 1.80
-
+    # Horizontal lower arm
     parts.append(
         _box_mesh(
             0,
             0,
             z,
-            arm_length,
+            radius * 1.75,
             thickness,
             thickness,
         )
     )
 
-    # Vertical anchor legs
+    # Vertical legs
     leg_height = max(
         D * 0.55,
         0.15,
@@ -375,77 +466,63 @@ def _anchor_geometry(
 
     leg_offset = radius * 0.82
 
+    for direction in [-1, 1]:
+
+        parts.append(
+            _box_mesh(
+                direction * leg_offset,
+                0,
+                z + leg_height / 2.0,
+                thickness,
+                thickness,
+                leg_height,
+            )
+        )
+
+    # Cross arm
     parts.append(
         _box_mesh(
-            leg_offset,
             0,
-            z + leg_height / 2.0,
+            0,
+            z + leg_height,
+            radius * 1.65,
             thickness,
             thickness,
-            leg_height,
+            angle=math.pi / 2,
         )
     )
 
-    parts.append(
-        _box_mesh(
-            -leg_offset,
-            0,
-            z + leg_height / 2.0,
-            thickness,
-            thickness,
-            leg_height,
-        )
-    )
-
-    # Rotate/replicate visual cross arms
     return parts
 
 
-def _rushton_geometry(
-    D,
-    z,
-    blades=6,
-):
-    """
-    3D Rushton turbine:
-    central disk + six radial blades.
-    """
+def _rushton_geometry(D, z, blades=6):
 
     radius = D / 2.0
 
     parts = []
 
-    # Disk
     disk_radius = radius * 0.38
     disk_thickness = max(
         0.035 * D,
         0.02,
     )
 
-    x, y, zz, i, j, k = _cylinder_mesh(
-        disk_radius,
-        z - disk_thickness / 2,
-        z + disk_thickness / 2,
-        segments=40,
-    )
-
     parts.append(
-        (
-            x,
-            y,
-            zz,
-            i,
-            j,
-            k
+        _cylinder_mesh(
+            disk_radius,
+            z - disk_thickness / 2,
+            z + disk_thickness / 2,
+            segments=40,
         )
     )
 
-    # Blades
     blade_length = radius * 0.52
+
     blade_width = max(
         D * 0.10,
         0.035,
     )
+
     blade_height = max(
         D * 0.10,
         0.025,
@@ -454,22 +531,19 @@ def _rushton_geometry(
     for n in range(blades):
 
         angle = (
-            2 *
-            math.pi *
-            n /
-            blades
+            2 * math.pi * n / blades
         )
 
         cx = (
-            radius *
-            0.62 *
-            math.cos(angle)
+            radius
+            * 0.62
+            * math.cos(angle)
         )
 
         cy = (
-            radius *
-            0.62 *
-            math.sin(angle)
+            radius
+            * 0.62
+            * math.sin(angle)
         )
 
         parts.append(
@@ -487,14 +561,7 @@ def _rushton_geometry(
     return parts
 
 
-def _pbt_geometry(
-    D,
-    z,
-    blades=4,
-):
-    """
-    3D pitched blade turbine.
-    """
+def _pbt_geometry(D, z, blades=4):
 
     radius = D / 2.0
 
@@ -510,21 +577,12 @@ def _pbt_geometry(
         0.05,
     )
 
-    x, y, zz, i, j, k = _cylinder_mesh(
-        hub_radius,
-        z - hub_height / 2,
-        z + hub_height / 2,
-        segments=32,
-    )
-
     parts.append(
-        (
-            x,
-            y,
-            zz,
-            i,
-            j,
-            k
+        _cylinder_mesh(
+            hub_radius,
+            z - hub_height / 2,
+            z + hub_height / 2,
+            segments=32,
         )
     )
 
@@ -533,6 +591,7 @@ def _pbt_geometry(
         D * 0.13,
         0.05,
     )
+
     blade_height = max(
         D * 0.055,
         0.025,
@@ -543,25 +602,21 @@ def _pbt_geometry(
     for n in range(blades):
 
         angle = (
-            2 *
-            math.pi *
-            n /
-            blades
+            2 * math.pi * n / blades
         )
 
         cx = (
-            radius *
-            0.50 *
-            math.cos(angle)
+            radius
+            * 0.50
+            * math.cos(angle)
         )
 
         cy = (
-            radius *
-            0.50 *
-            math.sin(angle)
+            radius
+            * 0.50
+            * math.sin(angle)
         )
 
-        # Blade as rectangular solid with inclination
         part = _box_mesh(
             cx,
             cy,
@@ -574,22 +629,27 @@ def _pbt_geometry(
 
         px, py, pz, pi, pj, pk = part
 
-        # Apply pitch around radial direction
-        local_x = (
-            px * math.cos(pitch_angle)
-            - pz * math.sin(pitch_angle)
+        # Correct local pitch transformation
+        local_x = px - cx
+        local_y = py - cy
+        local_z = pz - z
+
+        cp = math.cos(pitch_angle)
+        sp = math.sin(pitch_angle)
+
+        pitched_x = (
+            local_x * cp
+            - local_z * sp
         )
 
-        local_z = (
-            px * math.sin(pitch_angle)
-            + pz * math.cos(pitch_angle)
+        pitched_z = (
+            local_x * sp
+            + local_z * cp
         )
 
-        px = local_x
-        pz = local_z + z
-
-        # Remove double z translation caused by box helper
-        pz = pz - z + z
+        px = pitched_x + cx
+        py = local_y + cy
+        pz = pitched_z + z
 
         parts.append(
             (
@@ -605,14 +665,7 @@ def _pbt_geometry(
     return parts
 
 
-def _hydrofoil_geometry(
-    D,
-    z,
-    blades=3,
-):
-    """
-    Approximate hydrofoil impeller using tapered swept blades.
-    """
+def _hydrofoil_geometry(D, z, blades=3):
 
     radius = D / 2.0
 
@@ -621,31 +674,19 @@ def _hydrofoil_geometry(
     hub_radius = D * 0.12
     hub_height = D * 0.18
 
-    x, y, zz, i, j, k = _cylinder_mesh(
-        hub_radius,
-        z - hub_height / 2,
-        z + hub_height / 2,
-        segments=32,
-    )
-
     parts.append(
-        (
-            x,
-            y,
-            zz,
-            i,
-            j,
-            k,
+        _cylinder_mesh(
+            hub_radius,
+            z - hub_height / 2,
+            z + hub_height / 2,
+            segments=32,
         )
     )
 
     for n in range(blades):
 
         angle = (
-            2 *
-            math.pi *
-            n /
-            blades
+            2 * math.pi * n / blades
         )
 
         r1 = radius * 0.18
@@ -654,15 +695,92 @@ def _hydrofoil_geometry(
         width1 = D * 0.12
         width2 = D * 0.06
 
-        x1 = r1
-        x2 = r2
+        vertices = np.array(
+            [
+                [r1, -width1 / 2, -0.025 * D],
+                [r2, -width2 / 2, -0.015 * D],
+                [r2,  width2 / 2,  0.015 * D],
+                [r1,  width1 / 2,  0.025 * D],
+            ],
+            dtype=float,
+        )
+
+        ca = math.cos(angle)
+        sa = math.sin(angle)
+
+        xx = (
+            vertices[:, 0] * ca
+            - vertices[:, 1] * sa
+        )
+
+        yy = (
+            vertices[:, 0] * sa
+            + vertices[:, 1] * ca
+        )
+
+        zz = vertices[:, 2] + z
+
+        faces = [
+            (0, 1, 2),
+            (0, 2, 3),
+            (2, 1, 0),
+            (3, 2, 0),
+        ]
+
+        parts.append(
+            (
+                xx,
+                yy,
+                zz,
+                [f[0] for f in faces],
+                [f[1] for f in faces],
+                [f[2] for f in faces],
+            )
+        )
+
+    return parts
+
+
+def _marine_propeller_geometry(
+    D,
+    z,
+    blades=3,
+):
+
+    radius = D / 2.0
+
+    parts = []
+
+    hub_radius = D * 0.13
+    hub_height = D * 0.30
+
+    parts.append(
+        _cylinder_mesh(
+            hub_radius,
+            z - hub_height / 2,
+            z + hub_height / 2,
+            segments=32,
+        )
+    )
+
+    for n in range(blades):
+
+        angle = (
+            2 * math.pi * n / blades
+        )
+
+        r1 = radius * 0.18
+        r2 = radius * 0.92
+
+        w1 = D * 0.14
+        w2 = D * 0.045
 
         vertices = np.array(
             [
-                [x1, -width1 / 2, -0.02 * D],
-                [x2, -width2 / 2, -0.02 * D],
-                [x2,  width2 / 2,  0.02 * D],
-                [x1,  width1 / 2,  0.02 * D],
+                [r1, -w1 / 2, -D * 0.04],
+                [r2, -w2 / 2,  D * 0.04],
+                [r2,  w2 / 2, -D * 0.04],
+                [r1,  w1 / 2,  D * 0.04],
             ]
         )
 
@@ -679,120 +797,13 @@ def _hydrofoil_geometry(
             + vertices[:, 1] * ca
         )
 
-        zzv = vertices[:, 2] + z
-
-        faces = [
-            (0, 1, 2),
-            (0, 2, 3),
-            (2, 1, 0),
-            (3, 2, 0),
-        ]
+        zz = vertices[:, 2] + z
 
         parts.append(
             (
                 xx,
                 yy,
-                zzv,
-                [f[0] for f in faces],
-                [f[1] for f in faces],
-                [f[2] for f in faces],
-            )
-        )
-
-    return parts
-
-
-def _marine_propeller_geometry(
-    D,
-    z,
-    blades=3,
-):
-    """
-    Approximate marine propeller.
-    """
-
-    radius = D / 2.0
-
-    parts = []
-
-    hub_radius = D * 0.13
-    hub_height = D * 0.30
-
-    x, y, zz, i, j, k = _cylinder_mesh(
-        hub_radius,
-        z - hub_height / 2,
-        z + hub_height / 2,
-        segments=32,
-    )
-
-    parts.append(
-        (
-            x,
-            y,
-            zz,
-            i,
-            j,
-            k,
-        )
-    )
-
-    for n in range(blades):
-
-        angle = (
-            2 *
-            math.pi *
-            n /
-            blades
-        )
-
-        r_inner = radius * 0.18
-        r_outer = radius * 0.92
-
-        width_inner = D * 0.14
-        width_outer = D * 0.045
-
-        points = []
-
-        for r, width, zz_offset in [
-            (r_inner, width_inner, -D * 0.04),
-            (r_outer, width_outer, D * 0.04),
-            (r_outer, width_outer, -D * 0.04),
-            (r_inner, width_inner, D * 0.04),
-        ]:
-
-            local_x = r
-            local_y = width / 2
-
-            xx = (
-                local_x * math.cos(angle)
-                - local_y * math.sin(angle)
-            )
-
-            yy = (
-                local_x * math.sin(angle)
-                + local_y * math.cos(angle)
-            )
-
-            points.append(
-                [
-                    xx,
-                    yy,
-                    z + zz_offset,
-                ]
-            )
-
-        points = np.asarray(points)
-
-        faces = [
-            (0, 1, 2),
-            (0, 2, 3),
-        ]
-
-        parts.append(
-            (
-                points[:, 0],
-                points[:, 1],
-                points[:, 2],
+                zz,
                 [0, 0],
                 [1, 2],
                 [2, 3],
@@ -802,21 +813,13 @@ def _marine_propeller_geometry(
     return parts
 
 
-def _helical_ribbon_geometry(
-    D,
-    z,
-):
-    """
-    Approximate helical ribbon.
-    """
+def _helical_ribbon_geometry(D, z):
 
     radius = D / 2.0 * 0.88
-
     height = D * 0.85
 
     turns = 1.15
-
-    n = 80
+    n = 100
 
     theta = np.linspace(
         0,
@@ -825,11 +828,10 @@ def _helical_ribbon_geometry(
     )
 
     zz = (
-        z -
-        height / 2
-        +
-        height *
-        np.linspace(0, 1, n)
+        z
+        - height / 2
+        + height
+        * np.linspace(0, 1, n)
     )
 
     width = D * 0.08
@@ -838,44 +840,34 @@ def _helical_ribbon_geometry(
     y1 = radius * np.sin(theta)
 
     x2 = (
-        (radius - width)
-        * np.cos(theta)
-    )
+        radius - width
+    ) * np.cos(theta)
 
     y2 = (
-        (radius - width)
-        * np.sin(theta)
-    )
+        radius - width
+    ) * np.sin(theta)
 
-    x = np.concatenate(
-        [x1, x2]
-    )
-
-    y = np.concatenate(
-        [y1, y2]
-    )
-
-    z_all = np.concatenate(
-        [zz, zz]
-    )
+    x = np.concatenate([x1, x2])
+    y = np.concatenate([y1, y2])
+    z_all = np.concatenate([zz, zz])
 
     faces = []
 
-    for nidx in range(n - 1):
+    for idx in range(n - 1):
 
         faces.append(
             (
-                nidx,
-                nidx + 1,
-                n + nidx + 1,
+                idx,
+                idx + 1,
+                n + idx + 1,
             )
         )
 
         faces.append(
             (
-                nidx,
-                n + nidx + 1,
-                n + nidx,
+                idx,
+                n + idx + 1,
+                n + idx,
             )
         )
 
@@ -891,14 +883,7 @@ def _helical_ribbon_geometry(
     ]
 
 
-def _rci_geometry(
-    D,
-    z,
-    blades=2,
-):
-    """
-    Approximate RCI / radial curved impeller.
-    """
+def _rci_geometry(D, z, blades=2):
 
     radius = D / 2.0
 
@@ -907,50 +892,32 @@ def _rci_geometry(
     hub_radius = D * 0.13
     hub_height = D * 0.20
 
-    x, y, zz, i, j, k = _cylinder_mesh(
-        hub_radius,
-        z - hub_height / 2,
-        z + hub_height / 2,
-        segments=32,
-    )
-
     parts.append(
-        (
-            x,
-            y,
-            zz,
-            i,
-            j,
-            k,
+        _cylinder_mesh(
+            hub_radius,
+            z - hub_height / 2,
+            z + hub_height / 2,
+            segments=32,
         )
     )
 
     for n in range(blades):
 
         angle = (
-            2 *
-            math.pi *
-            n /
-            blades
+            2 * math.pi * n / blades
         )
 
         theta = np.linspace(
             -math.pi / 3,
             math.pi / 3,
-            25,
+            30,
         )
 
-        r = (
-            radius *
-            (
-                0.25 +
-                0.65 *
-                (
-                    1 -
-                    np.cos(theta)
-                ) /
-                2
-            )
+        r = radius * (
+            0.25
+            + 0.65
+            * (1 - np.cos(theta))
+            / 2
         )
 
         x = r * np.cos(
@@ -964,40 +931,34 @@ def _rci_geometry(
         width = D * 0.06
 
         x2 = (
-            (r - width)
-            * np.cos(theta + angle)
+            r - width
+        ) * np.cos(
+            theta + angle
         )
 
         y2 = (
-            (r - width)
-            * np.sin(theta + angle)
+            r - width
+        ) * np.sin(
+            theta + angle
         )
 
         z1 = (
-            z +
-            0.025 *
-            D *
-            np.sin(theta)
+            z
+            + 0.025
+            * D
+            * np.sin(theta)
         )
 
         z2 = (
-            z -
-            0.025 *
-            D *
-            np.sin(theta)
+            z
+            - 0.025
+            * D
+            * np.sin(theta)
         )
 
-        xx = np.concatenate(
-            [x, x2]
-        )
-
-        yy = np.concatenate(
-            [y, y2]
-        )
-
-        zzv = np.concatenate(
-            [z1, z2]
-        )
+        xx = np.concatenate([x, x2])
+        yy = np.concatenate([y, y2])
+        zz = np.concatenate([z1, z2])
 
         faces = []
 
@@ -1025,7 +986,7 @@ def _rci_geometry(
             (
                 xx,
                 yy,
-                zzv,
+                zz,
                 [f[0] for f in faces],
                 [f[1] for f in faces],
                 [f[2] for f in faces],
@@ -1036,7 +997,7 @@ def _rci_geometry(
 
 
 # ============================================================
-# IMPeller FACTORY
+# IMPELLER FACTORY
 # ============================================================
 
 def _create_impeller_geometry(
@@ -1044,36 +1005,21 @@ def _create_impeller_geometry(
     D,
     z,
 ):
-    """
-    Select the appropriate physical impeller geometry.
-    """
+    """Select physical impeller geometry."""
 
-    agitator = str(
-        agitator
-    ).strip()
-
-    name = agitator.lower()
+    name = str(agitator).strip().lower()
 
     if "anchor" in name:
-
-        return _anchor_geometry(
-            D,
-            z,
-        )
+        return _anchor_geometry(D, z)
 
     if "rushton" in name:
-
         return _rushton_geometry(
             D,
             z,
             blades=6,
         )
 
-    if (
-        "pitched" in name
-        or "pbt" in name
-    ):
-
+    if "pitched" in name or "pbt" in name:
         return _pbt_geometry(
             D,
             z,
@@ -1081,7 +1027,6 @@ def _create_impeller_geometry(
         )
 
     if "hydrofoil" in name:
-
         return _hydrofoil_geometry(
             D,
             z,
@@ -1089,32 +1034,25 @@ def _create_impeller_geometry(
         )
 
     if "marine" in name:
-
         return _marine_propeller_geometry(
             D,
             z,
             blades=3,
         )
 
-    if (
-        "helical" in name
-        or "ribbon" in name
-    ):
-
+    if "helical" in name or "ribbon" in name:
         return _helical_ribbon_geometry(
             D,
             z,
         )
 
     if "rci" in name:
-
         return _rci_geometry(
             D,
             z,
             blades=2,
         )
 
-    # Default to PBT
     return _pbt_geometry(
         D,
         z,
@@ -1123,7 +1061,7 @@ def _create_impeller_geometry(
 
 
 # ============================================================
-# ADD IMPELLER TO FIGURE
+# ADD IMPELLER
 # ============================================================
 
 def _add_impeller(
@@ -1131,9 +1069,6 @@ def _add_impeller(
     impeller,
     index,
 ):
-    """
-    Add one complete impeller assembly.
-    """
 
     agitator = impeller.get(
         "agitator",
@@ -1143,10 +1078,7 @@ def _add_impeller(
     D = _safe_float(
         impeller.get(
             "impeller_diameter_m",
-            impeller.get(
-                "D",
-                1.0,
-            ),
+            impeller.get("D", 1.0),
         ),
         1.0,
     )
@@ -1181,8 +1113,8 @@ def _add_impeller(
             j,
             k,
             name=(
-                f"Impeller {index + 1} "
-                f"– {agitator}"
+                f"Impeller {index + 1}"
+                f" – {agitator}"
             ),
             opacity=0.95,
             showlegend=pidx == 0,
@@ -1191,7 +1123,7 @@ def _add_impeller(
 
 
 # ============================================================
-# BAFFLE
+# BAFFLES
 # ============================================================
 
 def _add_baffles(
@@ -1201,9 +1133,6 @@ def _add_baffles(
     number_baffles,
     baffle_width=None,
 ):
-    """
-    Create actual rectangular vertical baffle plates.
-    """
 
     if number_baffles <= 0:
         return
@@ -1219,8 +1148,8 @@ def _add_baffles(
     radius = D / 2.0
 
     baffle_radius = (
-        radius -
-        baffle_thickness * 2
+        radius
+        - baffle_thickness * 2
     )
 
     for idx in range(
@@ -1228,27 +1157,25 @@ def _add_baffles(
     ):
 
         angle = (
-            2 *
-            math.pi *
-            idx /
-            number_baffles
+            2 * math.pi
+            * idx
+            / number_baffles
         )
 
         cx = (
-            baffle_radius *
-            math.cos(angle)
+            baffle_radius
+            * math.cos(angle)
         )
 
         cy = (
-            baffle_radius *
-            math.sin(angle)
+            baffle_radius
+            * math.sin(angle)
         )
 
-        # Long plate tangent to vessel wall
         x, y, z, i, j, k = _box_mesh(
             cx,
             cy,
-            liquid_z / 2.0,
+            liquid_z / 2,
             baffle_thickness,
             baffle_width,
             liquid_z,
@@ -1264,15 +1191,188 @@ def _add_baffles(
             j,
             k,
             name="Baffle",
-            opacity=0.80,
+            opacity=0.72,
             showlegend=idx == 0,
             color="#6F777D",
         )
 
 
 # ============================================================
-# LIQUID
+# VORTEX / LIQUID SURFACE
 # ============================================================
+
+def _calculate_vortex_depth(
+    D,
+    liquid_z,
+    rpm,
+    impellers,
+    user_vortex_depth=0.0,
+):
+    """
+    Estimate visualization vortex depth.
+
+    This is NOT a CFD/free-surface calculation.
+
+    The model increases vortex depth with:
+        - RPM
+        - impeller diameter
+        - liquid height
+        - impeller count
+        - tangential flow tendency
+    """
+
+    if liquid_z <= 0:
+        return 0.0
+
+    if user_vortex_depth > 0:
+        return min(
+            user_vortex_depth,
+            liquid_z * 0.45,
+        )
+
+    if not impellers:
+        return 0.0
+
+    max_D = 0.0
+    swirl_sum = 0.0
+
+    for imp in impellers:
+
+        d = _safe_float(
+            imp.get(
+                "impeller_diameter_m",
+                imp.get("D", D * 0.4),
+            ),
+            D * 0.4,
+        )
+
+        max_D = max(
+            max_D,
+            d,
+        )
+
+        characteristics = (
+            _impeller_flow_characteristics(
+                imp.get(
+                    "agitator",
+                    "PBT",
+                )
+            )
+        )
+
+        swirl_sum += (
+            characteristics["swirl"]
+            * characteristics["circulation"]
+        )
+
+    swirl_avg = (
+        swirl_sum
+        / max(len(impellers), 1)
+    )
+
+    rpm_factor = _clamp(
+        rpm / 180.0,
+        0.0,
+        2.0,
+    )
+
+    diameter_factor = _clamp(
+        max_D / max(D, 0.001),
+        0.05,
+        1.0,
+    )
+
+    count_factor = _clamp(
+        0.75
+        + 0.12 * len(impellers),
+        0.75,
+        1.20,
+    )
+
+    # Empirical visualization coefficient
+    depth = (
+        0.025
+        * liquid_z
+        * rpm_factor
+        * diameter_factor
+        * swirl_avg
+        * count_factor
+    )
+
+    return _clamp(
+        depth,
+        0.0,
+        liquid_z * 0.32,
+    )
+
+
+def _vortex_surface(
+    radius,
+    liquid_z,
+    vortex_depth,
+    n_radial=24,
+    n_theta=64,
+    phase=0.0,
+):
+    """
+    Create a 3D free surface with center depression.
+    """
+
+    r = np.linspace(
+        0.0,
+        radius * 0.995,
+        n_radial,
+    )
+
+    theta = np.linspace(
+        0.0,
+        2 * math.pi,
+        n_theta,
+    )
+
+    R, TH = np.meshgrid(
+        r,
+        theta,
+    )
+
+    normalized_r = (
+        R / max(radius, 1e-9)
+    )
+
+    # Strongest depression at shaft
+    depression = (
+        vortex_depth
+        * np.power(
+            1.0 - normalized_r ** 2,
+            1.55,
+        )
+    )
+
+    # Small wave disturbance
+    ripple = (
+        0.012
+        * max(radius, 0.1)
+        * np.sin(
+            3.0 * TH
+            - phase
+        )
+        * np.power(
+            normalized_r,
+            1.5,
+        )
+    )
+
+    Z = (
+        liquid_z
+        - depression
+        + ripple
+    )
+
+    X = R * np.cos(TH)
+    Y = R * np.sin(TH)
+
+    return X, Y, Z
+
 
 def _add_liquid(
     fig,
@@ -1283,9 +1383,10 @@ def _add_liquid(
     liquid_height,
     z_profile,
     r_profile,
+    vortex_depth=0.0,
 ):
     """
-    Create liquid body and liquid surface.
+    Add liquid body and vortex surface.
     """
 
     liquid_z = max(
@@ -1302,7 +1403,7 @@ def _add_liquid(
     theta = np.linspace(
         0,
         2 * math.pi,
-        80,
+        90,
     )
 
     liquid_radius = radius_at_height(
@@ -1311,43 +1412,6 @@ def _add_liquid(
         straight_height,
         bottom_type,
         top_type,
-    )
-
-    # --------------------------------------------------------
-    # Liquid surface
-    # --------------------------------------------------------
-
-    liquid_x = (
-        liquid_radius *
-        np.cos(theta)
-    )
-
-    liquid_y = (
-        liquid_radius *
-        np.sin(theta)
-    )
-
-    fig.add_trace(
-        go.Scatter3d(
-            x=liquid_x,
-            y=liquid_y,
-            z=np.full_like(
-                liquid_x,
-                liquid_z,
-            ),
-            mode="lines",
-            name="Liquid Surface",
-            line=dict(
-                width=5,
-                color="#2C9FB3",
-            ),
-            showlegend=True,
-            hovertemplate=(
-                f"Liquid level = "
-                f"{liquid_z:.2f} m"
-                "<extra></extra>"
-            ),
-        )
     )
 
     # --------------------------------------------------------
@@ -1374,13 +1438,13 @@ def _add_liquid(
         )
 
         XL = (
-            RL *
-            np.cos(THL)
+            RL
+            * np.cos(THL)
         )
 
         YL = (
-            RL *
-            np.sin(THL)
+            RL
+            * np.sin(THL)
         )
 
         fig.add_trace(
@@ -1393,60 +1457,99 @@ def _add_liquid(
                     [0, "#4BAFC1"],
                     [1, "#4BAFC1"],
                 ],
-                opacity=0.16,
+                opacity=0.105,
                 showscale=False,
                 name="Liquid",
                 hoverinfo="skip",
                 lighting=dict(
-                    ambient=0.45,
-                    diffuse=0.65,
-                    specular=0.25,
-                    roughness=0.5,
+                    ambient=0.50,
+                    diffuse=0.70,
+                    specular=0.30,
+                    roughness=0.45,
                 ),
             )
         )
 
-        # Liquid top surface
-        surface_x = (
-            liquid_radius *
-            np.cos(theta)
-        )
+    # --------------------------------------------------------
+    # VORTEX SURFACE
+    # --------------------------------------------------------
 
-        surface_y = (
-            liquid_radius *
-            np.sin(theta)
-        )
+    VX, VY, VZ = _vortex_surface(
+        liquid_radius,
+        liquid_z,
+        vortex_depth,
+        n_radial=28,
+        n_theta=90,
+    )
 
-        fig.add_trace(
-            go.Mesh3d(
-                x=np.concatenate(
-                    [
-                        surface_x,
-                        [0],
-                    ]
-                ),
-                y=np.concatenate(
-                    [
-                        surface_y,
-                        [0],
-                    ]
-                ),
-                z=np.concatenate(
-                    [
-                        np.full_like(
-                            surface_x,
-                            liquid_z,
-                        ),
-                        [liquid_z],
-                    ]
-                ),
-                alphahull=0,
-                opacity=0.08,
-                color="#45B7C7",
-                name="Liquid Surface",
-                showlegend=False,
-            )
+    fig.add_trace(
+        go.Surface(
+            x=VX,
+            y=VY,
+            z=VZ,
+            surfacecolor=VZ,
+            colorscale=[
+                [0.0, "#197F96"],
+                [0.45, "#2C9FB3"],
+                [1.0, "#69C5D0"],
+            ],
+            opacity=0.38,
+            showscale=False,
+            name="Vortex Surface",
+            hovertemplate=(
+                "Vortex surface"
+                "<br>Elevation = %{z:.2f} m"
+                "<extra></extra>"
+            ),
+            lighting=dict(
+                ambient=0.55,
+                diffuse=0.75,
+                specular=0.45,
+                roughness=0.25,
+            ),
         )
+    )
+
+    # Liquid level ring
+    ring_theta = np.linspace(
+        0,
+        2 * math.pi,
+        120,
+    )
+
+    ring_x = (
+        liquid_radius
+        * np.cos(ring_theta)
+    )
+
+    ring_y = (
+        liquid_radius
+        * np.sin(ring_theta)
+    )
+
+    ring_z = np.full_like(
+        ring_x,
+        liquid_z,
+    )
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=ring_x,
+            y=ring_y,
+            z=ring_z,
+            mode="lines",
+            name="Liquid Level",
+            line=dict(
+                width=4,
+                color="#2C9FB3",
+            ),
+            hovertemplate=(
+                f"Liquid Level = "
+                f"{liquid_z:.2f} m"
+                "<extra></extra>"
+            ),
+        )
+    )
 
     return liquid_z
 
@@ -1461,12 +1564,8 @@ def _add_shaft(
     total_height,
     shaft_diameter=None,
 ):
-    """
-    Actual cylindrical agitator shaft.
-    """
 
     if shaft_diameter is None:
-
         shaft_diameter = max(
             D * 0.055,
             0.035,
@@ -1474,12 +1573,12 @@ def _add_shaft(
 
     _add_cylinder(
         fig,
-        radius=shaft_diameter / 2.0,
+        radius=shaft_diameter / 2,
         z_bottom=0.0,
         z_top=total_height,
         name="Agitator Shaft",
         color="#626A70",
-        opacity=0.95,
+        opacity=0.92,
         segments=32,
         showlegend=True,
     )
@@ -1493,10 +1592,8 @@ def _add_vessel(
     fig,
     z_profile,
     r_profile,
+    opacity=0.24,
 ):
-    """
-    Add realistic shaded vessel shell.
-    """
 
     theta = np.linspace(
         0,
@@ -1515,13 +1612,13 @@ def _add_vessel(
     )
 
     X = (
-        R *
-        np.cos(TH)
+        R
+        * np.cos(TH)
     )
 
     Y = (
-        R *
-        np.sin(TH)
+        R
+        * np.sin(TH)
     )
 
     fig.add_trace(
@@ -1529,11 +1626,11 @@ def _add_vessel(
             x=X,
             y=Y,
             z=Z,
-            opacity=0.24,
+            opacity=opacity,
             showscale=False,
             name="Reactor Vessel",
             hovertemplate=(
-                "Reactor vessel"
+                "Reactor Vessel"
                 "<extra></extra>"
             ),
             colorscale=[
@@ -1566,7 +1663,7 @@ def _add_vessel(
 
 
 # ============================================================
-# NOZZLE
+# NOZZLES
 # ============================================================
 
 def _add_top_nozzle(
@@ -1574,18 +1671,18 @@ def _add_top_nozzle(
     D,
     total_height,
 ):
-    """
-    Add a simple top-mounted nozzle.
-    """
 
     nozzle_diameter = D * 0.16
     nozzle_height = D * 0.18
 
     _add_cylinder(
         fig,
-        radius=nozzle_diameter / 2.0,
+        radius=nozzle_diameter / 2,
         z_bottom=total_height,
-        z_top=total_height + nozzle_height,
+        z_top=(
+            total_height
+            + nozzle_height
+        ),
         name="Top Nozzle",
         color="#69747A",
         opacity=0.90,
@@ -1594,18 +1691,11 @@ def _add_top_nozzle(
     )
 
 
-# ============================================================
-# OUTLET NOZZLE
-# ============================================================
-
 def _add_bottom_outlet(
     fig,
     D,
     bottom_z=0.0,
 ):
-    """
-    Add a bottom outlet nozzle.
-    """
 
     nozzle_diameter = D * 0.12
     nozzle_length = D * 0.18
@@ -1616,17 +1706,10 @@ def _add_bottom_outlet(
         32,
     )
 
-    radius = nozzle_diameter / 2.0
+    radius = nozzle_diameter / 2
 
-    x = (
-        radius *
-        np.cos(theta)
-    )
-
-    y = (
-        radius *
-        np.sin(theta)
-    )
+    x = radius * np.cos(theta)
+    y = radius * np.sin(theta)
 
     z1 = np.full_like(
         x,
@@ -1638,28 +1721,15 @@ def _add_bottom_outlet(
         bottom_z,
     )
 
-    # Create side surface
-    xx = np.concatenate(
-        [x, x]
-    )
-
-    yy = np.concatenate(
-        [y, y]
-    )
-
-    zz = np.concatenate(
-        [z1, z2]
-    )
+    xx = np.concatenate([x, x])
+    yy = np.concatenate([y, y])
+    zz = np.concatenate([z1, z2])
 
     faces = []
 
-    for i in range(
-        len(theta)
-    ):
+    for i in range(len(theta)):
 
-        j = (
-            i + 1
-        ) % len(theta)
+        j = (i + 1) % len(theta)
 
         faces.append(
             (
@@ -1693,7 +1763,7 @@ def _add_bottom_outlet(
 
 
 # ============================================================
-# DIMENSION HELPERS
+# DIMENSIONS
 # ============================================================
 
 def _add_dimension(
@@ -1705,11 +1775,7 @@ def _add_dimension(
     y2,
     z2,
     text,
-    color="#333333",
 ):
-    """
-    Add dimension line + annotation.
-    """
 
     fig.add_trace(
         go.Scatter3d(
@@ -1719,7 +1785,6 @@ def _add_dimension(
             mode="lines",
             line=dict(
                 width=3,
-                color=color,
                 dash="dash",
             ),
             name=text,
@@ -1730,40 +1795,24 @@ def _add_dimension(
 
     fig.add_trace(
         go.Scatter3d(
-            x=[
-                (x1 + x2) / 2
-            ],
-            y=[
-                (y1 + y2) / 2
-            ],
-            z=[
-                (z1 + z2) / 2
-            ],
+            x=[(x1 + x2) / 2],
+            y=[(y1 + y2) / 2],
+            z=[(z1 + z2) / 2],
             mode="text",
             text=[text],
-            textfont=dict(
-                size=11,
-            ),
+            textfont=dict(size=11),
             showlegend=False,
             hoverinfo="skip",
         )
     )
 
 
-# ============================================================
-# REACTOR DIMENSIONS
-# ============================================================
-
 def _add_reactor_dimensions(
     fig,
     D,
     total_height,
 ):
-    """
-    Add overall diameter and height.
-    """
 
-    # Diameter
     _add_dimension(
         fig,
         -D / 2,
@@ -1775,7 +1824,6 @@ def _add_reactor_dimensions(
         f"ID = {D:.2f} m",
     )
 
-    # Height
     offset = D * 0.72
 
     _add_dimension(
@@ -1791,7 +1839,7 @@ def _add_reactor_dimensions(
 
 
 # ============================================================
-# IMPELLER ELEVATION MARKERS
+# IMPELLER ELEVATION LABELS
 # ============================================================
 
 def _add_impeller_elevation_markers(
@@ -1799,9 +1847,6 @@ def _add_impeller_elevation_markers(
     D,
     impellers,
 ):
-    """
-    Add elevation labels for individual impellers.
-    """
 
     for idx, impeller in enumerate(
         impellers
@@ -1845,29 +1890,798 @@ def _add_impeller_elevation_markers(
 
 
 # ============================================================
-# MIXING TRACERS
+# FLOW FIELD
 # ============================================================
 
-def _add_mixing_tracers(
+def _flow_velocity(
+    x,
+    y,
+    z,
+    D,
+    liquid_z,
+    impellers,
+    rpm,
+    number_baffles=4,
+):
+    """
+    Parametric stirred-tank velocity field.
+
+    Cylindrical coordinates:
+        r     = radial position
+        theta = azimuth
+        z     = elevation
+
+    The field combines:
+        - impeller radial pumping
+        - axial circulation
+        - tangential swirl
+        - vertical recirculation
+        - wall damping
+        - baffle damping
+
+    This is intended for visualization, not CFD prediction.
+    """
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    z = np.asarray(z, dtype=float)
+
+    r = np.sqrt(
+        x * x + y * y
+    )
+
+    r_safe = np.maximum(
+        r,
+        D * 0.015,
+    )
+
+    theta = np.arctan2(
+        y,
+        x,
+    )
+
+    H = max(
+        liquid_z,
+        D * 0.1,
+    )
+
+    # --------------------------------------------------------
+    # Overall scale
+    # --------------------------------------------------------
+
+    rpm_factor = _clamp(
+        rpm / 120.0,
+        0.15,
+        3.0,
+    )
+
+    velocity_scale = (
+        0.16
+        * D
+        * rpm_factor
+    )
+
+    u_r = np.zeros_like(x)
+    u_theta = np.zeros_like(x)
+    u_z = np.zeros_like(x)
+
+    # --------------------------------------------------------
+    # Each impeller contributes to local flow
+    # --------------------------------------------------------
+
+    for impeller in impellers:
+
+        imp_D = _safe_float(
+            impeller.get(
+                "impeller_diameter_m",
+                impeller.get(
+                    "D",
+                    D * 0.4,
+                ),
+            ),
+            D * 0.4,
+        )
+
+        imp_z = _safe_float(
+            impeller.get(
+                "elevation_from_bottom_m",
+                impeller.get(
+                    "elevation_m",
+                    H * 0.5,
+                ),
+            ),
+            H * 0.5,
+        )
+
+        agitator = impeller.get(
+            "agitator",
+            "PBT",
+        )
+
+        characteristics = (
+            _impeller_flow_characteristics(
+                agitator
+            )
+        )
+
+        axial = characteristics["axial"]
+        radial = characteristics["radial"]
+        swirl = characteristics["swirl"]
+        circulation = characteristics["circulation"]
+
+        # ----------------------------------------------------
+        # Impeller influence zone
+        # ----------------------------------------------------
+
+        influence_radius = (
+            max(
+                imp_D * 1.35,
+                D * 0.20,
+            )
+        )
+
+        influence_height = (
+            max(
+                imp_D * 1.05,
+                H * 0.15,
+            )
+        )
+
+        radial_distance = (
+            r / max(
+                imp_D / 2,
+                0.001,
+            )
+        )
+
+        vertical_distance = (
+            (z - imp_z)
+            / influence_height
+        )
+
+        radial_weight = np.exp(
+            -(
+                radial_distance
+                / 2.2
+            ) ** 4
+        )
+
+        vertical_weight = np.exp(
+            -(
+                vertical_distance
+                / 1.5
+            ) ** 2
+        )
+
+        weight = (
+            radial_weight
+            * vertical_weight
+        )
+
+        # ----------------------------------------------------
+        # Radial pumping
+        # ----------------------------------------------------
+
+        radial_profile = (
+            np.tanh(
+                (r - imp_D * 0.12)
+                / max(
+                    imp_D * 0.18,
+                    0.001,
+                )
+            )
+        )
+
+        u_r += (
+            velocity_scale
+            * radial
+            * circulation
+            * weight
+            * radial_profile
+        )
+
+        # ----------------------------------------------------
+        # Tangential rotation
+        # ----------------------------------------------------
+
+        swirl_profile = np.exp(
+            -(
+                r
+                / max(
+                    imp_D * 1.15,
+                    0.001,
+                )
+            ) ** 2
+        )
+
+        u_theta += (
+            velocity_scale
+            * swirl
+            * weight
+            * swirl_profile
+        )
+
+        # ----------------------------------------------------
+        # Axial pumping
+        # ----------------------------------------------------
+
+        direction = (
+            1.0
+            if imp_z < H * 0.55
+            else -1.0
+        )
+
+        # Hydrofoil / PBT generally stronger axial flow
+        axial_shape = np.sin(
+            math.pi
+            * _clamp(
+                z / H,
+                0.0,
+                1.0,
+            )
+        )
+
+        u_z += (
+            velocity_scale
+            * axial
+            * circulation
+            * weight
+            * direction
+            * axial_shape
+        )
+
+        # ----------------------------------------------------
+        # Global circulation loop
+        # ----------------------------------------------------
+
+        distance_from_impeller = (
+            (z - imp_z)
+            / max(H, 0.001)
+        )
+
+        loop = np.sin(
+            math.pi
+            * _clamp(
+                z / H,
+                0.0,
+                1.0,
+            )
+        )
+
+        u_z += (
+            velocity_scale
+            * 0.30
+            * circulation
+            * loop
+            * np.exp(
+                -(
+                    r
+                    / max(
+                        D * 0.42,
+                        0.001,
+                    )
+                ) ** 2
+            )
+        )
+
+    # --------------------------------------------------------
+    # Wall damping
+    # --------------------------------------------------------
+
+    wall_ratio = (
+        r / max(D / 2, 0.001)
+    )
+
+    wall_damping = np.clip(
+        1.0
+        - 0.55
+        * np.maximum(
+            wall_ratio - 0.70,
+            0.0,
+        ) / 0.30,
+        0.25,
+        1.0,
+    )
+
+    u_r *= wall_damping
+    u_theta *= wall_damping
+    u_z *= wall_damping
+
+    # --------------------------------------------------------
+    # Baffle effect
+    # --------------------------------------------------------
+
+    if number_baffles > 0:
+
+        baffle_phase = (
+            number_baffles
+            * theta
+        )
+
+        baffle_damping = (
+            0.78
+            + 0.22
+            * np.abs(
+                np.sin(
+                    baffle_phase / 2
+                )
+            )
+        )
+
+        u_theta *= baffle_damping
+
+    # --------------------------------------------------------
+    # Convert cylindrical -> Cartesian
+    # --------------------------------------------------------
+
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    u_x = (
+        u_r * cos_t
+        - u_theta * sin_t
+    )
+
+    u_y = (
+        u_r * sin_t
+        + u_theta * cos_t
+    )
+
+    # --------------------------------------------------------
+    # Keep flow inside reactor
+    # --------------------------------------------------------
+
+    near_wall = (
+        wall_ratio > 0.92
+    )
+
+    u_x = np.where(
+        near_wall,
+        u_x * 0.35,
+        u_x,
+    )
+
+    u_y = np.where(
+        near_wall,
+        u_y * 0.35,
+        u_y,
+    )
+
+    return u_x, u_y, u_z
+
+
+# ============================================================
+# STREAMLINE INTEGRATION
+# ============================================================
+
+def _integrate_streamline(
+    seed,
+    D,
+    liquid_z,
+    impellers,
+    rpm,
+    number_baffles,
+    steps=90,
+    dt=0.055,
+):
+    """
+    Integrate a streamline through the parametric velocity field.
+    """
+
+    point = np.asarray(
+        seed,
+        dtype=float,
+    )
+
+    points = [point.copy()]
+
+    radius_limit = D * 0.47
+
+    for _ in range(steps):
+
+        x, y, z = point
+
+        r = math.sqrt(
+            x * x + y * y
+        )
+
+        if r >= radius_limit:
+            break
+
+        if z <= 0.03:
+            break
+
+        if z >= liquid_z - 0.03:
+            break
+
+        ux, uy, uz = _flow_velocity(
+            np.array([x]),
+            np.array([y]),
+            np.array([z]),
+            D,
+            liquid_z,
+            impellers,
+            rpm,
+            number_baffles,
+        )
+
+        velocity = np.array(
+            [
+                ux[0],
+                uy[0],
+                uz[0],
+            ]
+        )
+
+        speed = np.linalg.norm(
+            velocity
+        )
+
+        if speed < 1e-8:
+            break
+
+        # Normalize to prevent numerical explosion
+        direction = (
+            velocity
+            / speed
+        )
+
+        point = (
+            point
+            + direction * D * dt
+        )
+
+        # Reflect gently from boundaries
+        new_r = math.sqrt(
+            point[0] ** 2
+            + point[1] ** 2
+        )
+
+        if new_r > radius_limit:
+
+            factor = (
+                radius_limit
+                / max(
+                    new_r,
+                    1e-9,
+                )
+            )
+
+            point[0] *= factor
+            point[1] *= factor
+
+        point[2] = _clamp(
+            point[2],
+            0.04,
+            liquid_z - 0.04,
+        )
+
+        points.append(
+            point.copy()
+        )
+
+    if len(points) < 4:
+        return None
+
+    return np.asarray(points)
+
+
+def _generate_streamlines(
+    D,
+    liquid_z,
+    impellers,
+    rpm,
+    number_baffles,
+):
+    """
+    Generate multiple 3D circulation streamlines.
+    """
+
+    if liquid_z <= 0 or not impellers:
+        return []
+
+    seeds = []
+
+    # Several radial rings
+    seed_radii = [
+        D * 0.10,
+        D * 0.18,
+        D * 0.27,
+        D * 0.35,
+    ]
+
+    seed_heights = np.linspace(
+        max(
+            0.08,
+            liquid_z * 0.12,
+        ),
+        min(
+            liquid_z * 0.88,
+            liquid_z,
+        ),
+        5,
+    )
+
+    n_angles = 8
+
+    for rr in seed_radii:
+
+        for zz in seed_heights:
+
+            for j in range(
+                n_angles
+            ):
+
+                angle = (
+                    2
+                    * math.pi
+                    * j
+                    / n_angles
+                )
+
+                seeds.append(
+                    (
+                        rr * math.cos(angle),
+                        rr * math.sin(angle),
+                        zz,
+                    )
+                )
+
+    streamlines = []
+
+    for seed in seeds:
+
+        line = _integrate_streamline(
+            seed,
+            D,
+            liquid_z,
+            impellers,
+            rpm,
+            number_baffles,
+            steps=70,
+            dt=0.065,
+        )
+
+        if line is not None:
+
+            # Avoid excessive number of lines
+            if len(streamlines) < 70:
+                streamlines.append(
+                    line
+                )
+
+    return streamlines
+
+
+def _add_streamlines(
+    fig,
+    streamlines,
+):
+    """
+    Add 3D circulation streamlines.
+    """
+
+    if not streamlines:
+        return
+
+    for idx, line in enumerate(
+        streamlines
+    ):
+
+        # Add a small arrow-like marker at the end
+        x = line[:, 0]
+        y = line[:, 1]
+        z = line[:, 2]
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=x,
+                y=y,
+                z=z,
+                mode="lines",
+                name=(
+                    "3D Flow Streamlines"
+                    if idx == 0
+                    else "Flow"
+                ),
+                showlegend=idx == 0,
+                line=dict(
+                    width=2.2,
+                    color="#E88935",
+                ),
+                opacity=0.70,
+                hoverinfo="skip",
+            )
+        )
+
+
+# ============================================================
+# FLOW DIRECTION VECTORS
+# ============================================================
+
+def _add_flow_vectors(
     fig,
     D,
     liquid_z,
-    frames_count=36,
+    impellers,
+    rpm,
+    number_baffles,
 ):
     """
-    Add animated tracer particles.
+    Add selected 3D velocity direction arrows.
     """
 
     if liquid_z <= 0:
         return
 
+    radial_positions = [
+        D * 0.16,
+        D * 0.28,
+        D * 0.38,
+    ]
+
+    heights = np.linspace(
+        liquid_z * 0.18,
+        liquid_z * 0.82,
+        4,
+    )
+
+    angles = np.linspace(
+        0,
+        2 * math.pi,
+        8,
+        endpoint=False,
+    )
+
+    for rr in radial_positions:
+
+        for zz in heights:
+
+            for angle in angles:
+
+                x = rr * math.cos(angle)
+                y = rr * math.sin(angle)
+
+                ux, uy, uz = _flow_velocity(
+                    np.array([x]),
+                    np.array([y]),
+                    np.array([zz]),
+                    D,
+                    liquid_z,
+                    impellers,
+                    rpm,
+                    number_baffles,
+                )
+
+                vx = ux[0]
+                vy = uy[0]
+                vz = uz[0]
+
+                mag = math.sqrt(
+                    vx * vx
+                    + vy * vy
+                    + vz * vz
+                )
+
+                if mag < 1e-8:
+                    continue
+
+                scale = (
+                    D * 0.10
+                    / max(
+                        mag,
+                        1e-8,
+                    )
+                )
+
+                # Keep vector length reasonable
+                scale = _clamp(
+                    scale,
+                    0.025,
+                    0.18,
+                )
+
+                x2 = x + vx * scale
+                y2 = y + vy * scale
+                z2 = _clamp(
+                    zz + vz * scale,
+                    0.02,
+                    liquid_z - 0.02,
+                )
+
+                fig.add_trace(
+                    go.Scatter3d(
+                        x=[x, x2],
+                        y=[y, y2],
+                        z=[zz, z2],
+                        mode="lines",
+                        line=dict(
+                            width=2,
+                            color="#C95E28",
+                        ),
+                        name="Flow Direction",
+                        showlegend=False,
+                        hoverinfo="skip",
+                    )
+                )
+
+
+# ============================================================
+# VORTEX CENTERLINE
+# ============================================================
+
+def _add_vortex_core(
+    fig,
+    D,
+    liquid_z,
+    vortex_depth,
+):
+    """
+    Add visible vortex core around shaft.
+    """
+
+    if vortex_depth <= 0:
+        return
+
+    theta = np.linspace(
+        0,
+        2 * math.pi * 2.5,
+        180,
+    )
+
+    radius = (
+        D * 0.035
+        + D * 0.018
+        * np.sin(theta * 2)
+    )
+
+    z = (
+        liquid_z
+        - vortex_depth
+        + 0.02
+        * D
+        * np.sin(theta)
+    )
+
+    x = radius * np.cos(theta)
+    y = radius * np.sin(theta)
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=x,
+            y=y,
+            z=z,
+            mode="lines",
+            name="Vortex Core",
+            line=dict(
+                width=5,
+                color="#126B7A",
+            ),
+            opacity=0.80,
+            hovertemplate=(
+                "Vortex Core"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+
+# ============================================================
+# MIXING TRACERS
+# ============================================================
+
+def _initialize_tracers(
+    D,
+    liquid_z,
+    n_particles=220,
+):
+    """
+    Generate initial tracer particles.
+    """
+
     rng = np.random.default_rng(
         42
     )
-
-    n_particles = 180
-
-    liquid_radius = D / 2.0
 
     particle_r = (
         np.sqrt(
@@ -1875,41 +2689,205 @@ def _add_mixing_tracers(
                 n_particles
             )
         )
-        *
-        liquid_radius
-        *
-        0.82
+        * D
+        * 0.40
     )
 
     particle_angle = (
         rng.random(
             n_particles
         )
-        *
-        2 *
-        math.pi
+        * 2
+        * math.pi
     )
 
     particle_z = (
-        rng.random(
+        0.05
+        + rng.random(
             n_particles
         )
-        *
-        liquid_z
+        * max(
+            liquid_z - 0.10,
+            0.05,
+        )
     )
 
     px = (
-        particle_r *
-        np.cos(
+        particle_r
+        * np.cos(
             particle_angle
         )
     )
 
     py = (
-        particle_r *
-        np.sin(
+        particle_r
+        * np.sin(
             particle_angle
         )
+
+    return (
+        px,
+        py,
+        particle_z,
+    )
+
+
+def _advance_particles(
+    px,
+    py,
+    pz,
+    D,
+    liquid_z,
+    impellers,
+    rpm,
+    number_baffles,
+    dt=0.20,
+):
+    """
+    Advance particles using the parametric flow field.
+    """
+
+    ux, uy, uz = _flow_velocity(
+        px,
+        py,
+        pz,
+        D,
+        liquid_z,
+        impellers,
+        rpm,
+        number_baffles,
+    )
+
+    # --------------------------------------------------------
+    # Normalize excessive velocity
+    # --------------------------------------------------------
+
+    speed = np.sqrt(
+        ux ** 2
+        + uy ** 2
+        + uz ** 2
+    )
+
+    max_speed = max(
+        D * 0.70,
+        0.1,
+    )
+
+    scale = np.minimum(
+        1.0,
+        max_speed
+        / np.maximum(
+            speed,
+            1e-9,
+        ),
+    )
+
+    ux *= scale
+    uy *= scale
+    uz *= scale
+
+    new_x = (
+        px
+        + ux * dt
+    )
+
+    new_y = (
+        py
+        + uy * dt
+    )
+
+    new_z = (
+        pz
+        + uz * dt
+    )
+
+    # --------------------------------------------------------
+    # Keep particles inside vessel
+    # --------------------------------------------------------
+
+    radius_limit = (
+        D * 0.445
+    )
+
+    radial_distance = np.sqrt(
+        new_x ** 2
+        + new_y ** 2
+    )
+
+    outside = (
+        radial_distance
+        > radius_limit
+    )
+
+    factor = (
+        radius_limit
+        / np.maximum(
+            radial_distance[outside],
+            1e-9,
+        )
+    )
+
+    new_x[outside] *= factor
+    new_y[outside] *= factor
+
+    # Bottom/top reflection
+    bottom = new_z < 0.04
+    top = new_z > liquid_z - 0.04
+
+    new_z[bottom] = (
+        0.08
+        + (
+            0.04
+            - new_z[bottom]
+        )
+    )
+
+    new_z[top] = (
+        liquid_z
+        - 0.08
+        - (
+            new_z[top]
+            - liquid_z
+            + 0.04
+        )
+    )
+
+    new_z = np.clip(
+        new_z,
+        0.04,
+        max(
+            liquid_z - 0.04,
+            0.05,
+        ),
+    )
+
+    return (
+        new_x,
+        new_y,
+        new_z,
+    )
+
+
+def _add_mixing_tracers(
+    fig,
+    D,
+    liquid_z,
+    impellers,
+    rpm,
+    number_baffles,
+    frames_count=48,
+):
+    """
+    Add animated particles following flow field.
+    """
+
+    if liquid_z <= 0:
+        return
+
+    px, py, pz = _initialize_tracers(
+        D,
+        liquid_z,
+        n_particles=220,
     )
 
     particle_trace = len(
@@ -1920,18 +2898,26 @@ def _add_mixing_tracers(
         go.Scatter3d(
             x=px,
             y=py,
-            z=particle_z,
+            z=pz,
             mode="markers",
-            name="Mixing Tracers",
+            name="Moving Tracer Particles",
             marker=dict(
-                size=2.8,
-                opacity=0.65,
-                color="#E07A3F",
+                size=3.2,
+                opacity=0.78,
+                color="#F28E3B",
+            ),
+            hovertemplate=(
+                "Mixing tracer"
+                "<extra></extra>"
             ),
         )
     )
 
     frames = []
+
+    current_x = px.copy()
+    current_y = py.copy()
+    current_z = pz.copy()
 
     nframes = max(
         1,
@@ -1942,86 +2928,33 @@ def _add_mixing_tracers(
         nframes
     ):
 
-        rotation = (
-            2 *
-            math.pi *
-            frame_idx /
-            nframes
-        )
-
-        # Add slight axial circulation
-        angle = (
-            particle_angle +
-            rotation
-        )
-
-        radial_factor = (
-            1.0 +
-            0.08 *
-            np.sin(
-                particle_z /
-                max(
-                    liquid_z,
-                    0.001,
-                )
-                *
-                4 *
-                math.pi
-                +
-                rotation
+        current_x, current_y, current_z = (
+            _advance_particles(
+                current_x,
+                current_y,
+                current_z,
+                D,
+                liquid_z,
+                impellers,
+                rpm,
+                number_baffles,
+                dt=0.22,
             )
-        )
-
-        radius_frame = (
-            particle_r *
-            radial_factor
-        )
-
-        fx = (
-            radius_frame *
-            np.cos(angle)
-        )
-
-        fy = (
-            radius_frame *
-            np.sin(angle)
-        )
-
-        fz = (
-            particle_z
-            +
-            0.035 *
-            D
-            *
-            np.sin(
-                particle_angle *
-                2
-                +
-                rotation
-            )
-        )
-
-        fz = np.clip(
-            fz,
-            0,
-            liquid_z,
         )
 
         frames.append(
             go.Frame(
-                name=str(
-                    frame_idx
-                ),
+                name=f"mix_{frame_idx}",
                 data=[
                     go.Scatter3d(
-                        x=fx,
-                        y=fy,
-                        z=fz,
+                        x=current_x,
+                        y=current_y,
+                        z=current_z,
                         mode="markers",
                         marker=dict(
-                            size=2.8,
-                            opacity=0.65,
-                            color="#E07A3F",
+                            size=3.2,
+                            opacity=0.78,
+                            color="#F28E3B",
                         ),
                     )
                 ],
@@ -2035,7 +2968,136 @@ def _add_mixing_tracers(
 
 
 # ============================================================
-# MAIN REACTOR 3D FUNCTION
+# ROTATING IMPELLER INDICATORS
+# ============================================================
+
+def _add_rotation_rings(
+    fig,
+    impellers,
+):
+
+    for idx, impeller in enumerate(
+        impellers
+    ):
+
+        D = _safe_float(
+            impeller.get(
+                "impeller_diameter_m",
+                impeller.get(
+                    "D",
+                    1.0,
+                ),
+            ),
+            1.0,
+        )
+
+        z = _safe_float(
+            impeller.get(
+                "elevation_from_bottom_m",
+                impeller.get(
+                    "elevation_m",
+                    0.5,
+                ),
+            ),
+            0.5,
+        )
+
+        radius = (
+            D * 0.56
+        )
+
+        theta = np.linspace(
+            0,
+            2 * math.pi,
+            80,
+        )
+
+        x = radius * np.cos(theta)
+        y = radius * np.sin(theta)
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=x,
+                y=y,
+                z=np.full_like(
+                    x,
+                    z,
+                ),
+                mode="lines",
+                name=(
+                    f"Rotation Zone "
+                    f"{idx + 1}"
+                ),
+                line=dict(
+                    width=2,
+                    dash="dot",
+                ),
+                opacity=0.35,
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+
+
+# ============================================================
+# FLOW LEGEND / ENGINEERING INFO
+# ============================================================
+
+def _add_flow_legend(
+    fig,
+    vortex_depth,
+    impellers,
+    rpm,
+):
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=[None],
+            y=[None],
+            z=[None],
+            mode="lines",
+            line=dict(
+                width=4,
+                color="#E88935",
+            ),
+            name="Circulation Streamlines",
+            showlegend=True,
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=[None],
+            y=[None],
+            z=[None],
+            mode="markers",
+            marker=dict(
+                size=6,
+                color="#F28E3B",
+            ),
+            name="Moving Tracers",
+            showlegend=True,
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=[None],
+            y=[None],
+            z=[None],
+            mode="lines",
+            line=dict(
+                width=5,
+                color="#126B7A",
+            ),
+            name="Vortex Core",
+            showlegend=True,
+        )
+    )
+
+
+# ============================================================
+# MAIN FUNCTION
 # ============================================================
 
 def create_reactor_animation(
@@ -2050,70 +3112,116 @@ def create_reactor_animation(
     rpm=120,
     number_baffles=4,
     vortex_depth=0.0,
-    frames_count=36,
+    frames_count=48,
 
-    # --------------------------------------------------------
-    # NEW MULTI-IMPELLER INPUT
-    # --------------------------------------------------------
-
+    # Multi-impeller input
     impellers=None,
 
-    # --------------------------------------------------------
-    # OPTIONAL DISPLAY CONTROLS
-    # --------------------------------------------------------
-
+    # Display controls
     show_dimensions=True,
     show_nozzles=True,
     show_tracers=True,
-    vessel_opacity=0.24,
+    vessel_opacity=0.20,
     show_baffles=True,
+
+    # NEW FLOW CONTROLS
+    show_streamlines=True,
+    show_flow_vectors=False,
+    show_vortex=True,
 ):
     """
-    Create professional interactive 3D reactor visualization.
+    Advanced interactive 3D reactor mixing visualization.
 
-    Backward compatible with the old single-impeller interface.
+    Parameters
+    ----------
+    D:
+        Reactor internal diameter [m]
 
-    New format:
+    straight_height:
+        Straight-side height [m]
 
-    impellers = [
-        {
-            "position": "Bottom",
-            "agitator": "Anchor",
-            "impeller_diameter_m": 1.60,
-            "elevation_from_bottom_m": 0.30,
-        },
-        {
-            "position": "Middle",
-            "agitator": "Pitched Blade Turbine",
-            "impeller_diameter_m": 1.20,
-            "elevation_from_bottom_m": 1.40,
-        },
-    ]
+    liquid_height:
+        Liquid height [m]
+
+    rpm:
+        Agitator speed [RPM]
+
+    impellers:
+        List of dictionaries:
+
+        [
+            {
+                "position": "Bottom",
+                "agitator": "Anchor",
+                "impeller_diameter_m": 1.60,
+                "elevation_from_bottom_m": 0.30,
+            },
+            {
+                "position": "Middle",
+                "agitator": "Pitched Blade Turbine",
+                "impeller_diameter_m": 1.20,
+                "elevation_from_bottom_m": 1.40,
+            },
+            {
+                "position": "Top",
+                "agitator": "Rushton Turbine",
+                "impeller_diameter_m": 1.00,
+                "elevation_from_bottom_m": 2.40,
+            },
+        ]
+
+    IMPORTANT:
+    The flow field is a parametric engineering visualization,
+    not a CFD solution.
     """
 
-    D = _safe_float(
-        D,
-        1.0,
+    # ========================================================
+    # SAFE INPUTS
+    # ========================================================
+
+    D = max(
+        _safe_float(D, 1.0),
+        0.10,
     )
 
-    straight_height = _safe_float(
-        straight_height,
-        2.0,
+    straight_height = max(
+        _safe_float(
+            straight_height,
+            2.0,
+        ),
+        0.10,
     )
 
-    liquid_height = _safe_float(
-        liquid_height,
+    liquid_height = max(
+        _safe_float(
+            liquid_height,
+            0.0,
+        ),
         0.0,
     )
 
-    rpm = _safe_float(
-        rpm,
-        120.0,
+    rpm = max(
+        _safe_float(
+            rpm,
+            120.0,
+        ),
+        0.0,
     )
 
-    number_baffles = _safe_int(
-        number_baffles,
-        4,
+    number_baffles = max(
+        _safe_int(
+            number_baffles,
+            4,
+        ),
+        0,
+    )
+
+    frames_count = max(
+        _safe_int(
+            frames_count,
+            48,
+        ),
+        8,
     )
 
     # ========================================================
@@ -2129,11 +3237,111 @@ def create_reactor_animation(
     )
 
     total_height = _safe_float(
-        z_profile[-1]
+        z_profile[-1],
+        1.0,
     )
 
     # ========================================================
-    # CREATE FIGURE
+    # NORMALIZE IMPELLERS
+    # ========================================================
+
+    normalized_impellers = []
+
+    if impellers:
+
+        for item in impellers:
+
+            normalized_impellers.append(
+                {
+                    "position": item.get(
+                        "position",
+                        "Auto",
+                    ),
+                    "agitator": item.get(
+                        "agitator",
+                        agitator,
+                    ),
+                    "impeller_diameter_m":
+                        max(
+                            _safe_float(
+                                item.get(
+                                    "impeller_diameter_m",
+                                    item.get(
+                                        "D",
+                                        impeller_diameter,
+                                    ),
+                                ),
+                                impeller_diameter,
+                            ),
+                            0.05,
+                        ),
+                    "elevation_from_bottom_m":
+                        _safe_float(
+                            item.get(
+                                "elevation_from_bottom_m",
+                                item.get(
+                                    "elevation_m",
+                                    0.5,
+                                ),
+                            ),
+                            0.5,
+                        ),
+                }
+            )
+
+    else:
+
+        nimp = max(
+            1,
+            _safe_int(
+                number_impellers,
+                1,
+            ),
+        )
+
+        if nimp == 1:
+
+            positions = [
+                min(
+                    liquid_height * 0.25,
+                    liquid_height,
+                )
+            ]
+
+        else:
+
+            positions = np.linspace(
+                liquid_height * 0.20,
+                liquid_height * 0.80,
+                nimp,
+            )
+
+        normalized_impellers = []
+
+        for z_imp in positions:
+
+            normalized_impellers.append(
+                {
+                    "position": "Auto",
+                    "agitator": agitator,
+                    "impeller_diameter_m":
+                        max(
+                            _safe_float(
+                                impeller_diameter,
+                                D * 0.4,
+                            ),
+                            0.05,
+                        ),
+                    "elevation_from_bottom_m":
+                        _safe_float(
+                            z_imp,
+                            0.5,
+                        ),
+                }
+            )
+
+    # ========================================================
+    # FIGURE
     # ========================================================
 
     fig = go.Figure()
@@ -2146,6 +3354,25 @@ def create_reactor_animation(
         fig,
         z_profile,
         r_profile,
+        opacity=vessel_opacity,
+    )
+
+    # ========================================================
+    # VORTEX DEPTH
+    # ========================================================
+
+    calculated_vortex_depth = (
+        _calculate_vortex_depth(
+            D,
+            liquid_height,
+            rpm,
+            normalized_impellers,
+            user_vortex_depth=
+                _safe_float(
+                    vortex_depth,
+                    0.0,
+                ),
+        )
     )
 
     # ========================================================
@@ -2161,6 +3388,11 @@ def create_reactor_animation(
         liquid_height,
         z_profile,
         r_profile,
+        vortex_depth=(
+            calculated_vortex_depth
+            if show_vortex
+            else 0.0
+        ),
     )
 
     # ========================================================
@@ -2187,103 +3419,7 @@ def create_reactor_animation(
         )
 
     # ========================================================
-    # IMPELLER CONFIGURATION
-    # ========================================================
-
-    if impellers:
-
-        normalized_impellers = []
-
-        for item in impellers:
-
-            normalized_impellers.append(
-                {
-                    "position": item.get(
-                        "position",
-                        "",
-                    ),
-                    "agitator": item.get(
-                        "agitator",
-                        agitator,
-                    ),
-                    "impeller_diameter_m":
-                        _safe_float(
-                            item.get(
-                                "impeller_diameter_m",
-                                item.get(
-                                    "D",
-                                    impeller_diameter,
-                                ),
-                            ),
-                            impeller_diameter,
-                        ),
-                    "elevation_from_bottom_m":
-                        _safe_float(
-                            item.get(
-                                "elevation_from_bottom_m",
-                                item.get(
-                                    "elevation_m",
-                                    0.0,
-                                ),
-                            ),
-                            0.0,
-                        ),
-                }
-            )
-
-    else:
-
-        nimp = max(
-            1,
-            _safe_int(
-                number_impellers,
-                1,
-            ),
-        )
-
-        # ----------------------------------------------------
-        # Legacy positioning
-        # ----------------------------------------------------
-
-        if nimp == 1:
-
-            positions = [
-                min(
-                    liquid_z * 0.25,
-                    liquid_z,
-                )
-            ]
-
-        else:
-
-            positions = np.linspace(
-                liquid_z * 0.20,
-                liquid_z * 0.80,
-                nimp,
-            )
-
-        normalized_impellers = []
-
-        for z_imp in positions:
-
-            normalized_impellers.append(
-                {
-                    "position": "Auto",
-                    "agitator": agitator,
-                    "impeller_diameter_m":
-                        _safe_float(
-                            impeller_diameter,
-                            1.0,
-                        ),
-                    "elevation_from_bottom_m":
-                        _safe_float(
-                            z_imp
-                        ),
-                }
-            )
-
-    # ========================================================
-    # ADD EACH REAL IMPELLER
+    # IMPELLERS
     # ========================================================
 
     for idx, impeller in enumerate(
@@ -2297,7 +3433,16 @@ def create_reactor_animation(
         )
 
     # ========================================================
-    # IMPELLER ELEVATION LABELS
+    # ROTATION ZONES
+    # ========================================================
+
+    _add_rotation_rings(
+        fig,
+        normalized_impellers,
+    )
+
+    # ========================================================
+    # ELEVATION LABELS
     # ========================================================
 
     if show_dimensions:
@@ -2339,7 +3484,56 @@ def create_reactor_animation(
         )
 
     # ========================================================
-    # MIXING TRACERS
+    # STREAMLINES
+    # ========================================================
+
+    streamlines = []
+
+    if show_streamlines:
+
+        streamlines = _generate_streamlines(
+            D,
+            liquid_z,
+            normalized_impellers,
+            rpm,
+            number_baffles,
+        )
+
+        _add_streamlines(
+            fig,
+            streamlines,
+        )
+
+    # ========================================================
+    # FLOW VECTORS
+    # ========================================================
+
+    if show_flow_vectors:
+
+        _add_flow_vectors(
+            fig,
+            D,
+            liquid_z,
+            normalized_impellers,
+            rpm,
+            number_baffles,
+        )
+
+    # ========================================================
+    # VORTEX CORE
+    # ========================================================
+
+    if show_vortex:
+
+        _add_vortex_core(
+            fig,
+            D,
+            liquid_z,
+            calculated_vortex_depth,
+        )
+
+    # ========================================================
+    # TRACERS
     # ========================================================
 
     if show_tracers:
@@ -2348,11 +3542,31 @@ def create_reactor_animation(
             fig,
             D,
             liquid_z,
+            normalized_impellers,
+            rpm,
+            number_baffles,
             frames_count=frames_count,
         )
 
     # ========================================================
-    # CONTROL BUTTONS
+    # FLOW LEGEND
+    # ========================================================
+
+    if (
+        show_streamlines
+        or show_tracers
+        or show_vortex
+    ):
+
+        _add_flow_legend(
+            fig,
+            calculated_vortex_depth,
+            normalized_impellers,
+            rpm,
+        )
+
+    # ========================================================
+    # ANIMATION CONTROLS
     # ========================================================
 
     if show_tracers:
@@ -2369,33 +3583,44 @@ def create_reactor_animation(
                     "yanchor": "bottom",
                     "buttons": [
                         {
-                            "label": "▶ Start Mixing",
-                            "method": "animate",
+                            "label":
+                                "▶ Start Mixing",
+                            "method":
+                                "animate",
                             "args": [
                                 None,
                                 {
                                     "frame": {
-                                        "duration": 100,
-                                        "redraw": True,
+                                        "duration":
+                                            80,
+                                        "redraw":
+                                            True,
                                     },
                                     "transition": {
-                                        "duration": 0,
+                                        "duration":
+                                            0,
                                     },
-                                    "fromcurrent": True,
+                                    "fromcurrent":
+                                        True,
                                 },
                             ],
                         },
                         {
-                            "label": "⏸ Pause",
-                            "method": "animate",
+                            "label":
+                                "⏸ Pause",
+                            "method":
+                                "animate",
                             "args": [
                                 [None],
                                 {
                                     "frame": {
-                                        "duration": 0,
-                                        "redraw": False,
+                                        "duration":
+                                            0,
+                                        "redraw":
+                                            False,
                                     },
-                                    "mode": "immediate",
+                                    "mode":
+                                        "immediate",
                                 },
                             ],
                         },
@@ -2408,43 +3633,75 @@ def create_reactor_animation(
     # TITLE
     # ========================================================
 
-    if normalized_impellers:
-
-        impeller_names = ", ".join(
-            [
-                str(
-                    x.get(
-                        "agitator",
-                        "Impeller",
-                    )
+    impeller_names = ", ".join(
+        [
+            str(
+                item.get(
+                    "agitator",
+                    "Impeller",
                 )
-                for x in normalized_impellers
-            ]
-        )
+            )
+            for item in normalized_impellers
+        ]
+    )
 
-    else:
-
+    if not impeller_names:
         impeller_names = str(
             agitator
         )
 
+    title_text = (
+        "3D Reactor Mixing & Flow Model"
+        f"<br><sup>"
+        f"ID = {D:.2f} m | "
+        f"Liquid Height = {liquid_z:.2f} m | "
+        f"RPM = {rpm:.0f} | "
+        f"Impellers = {len(normalized_impellers)}"
+        f"</sup>"
+    )
+
+    # ========================================================
+    # ENGINEERING ANNOTATION
+    # ========================================================
+
+    fig.add_annotation(
+        text=(
+            f"<b>Mixing Visualization</b><br>"
+            f"Vortex depth ≈ "
+            f"{calculated_vortex_depth:.3f} m<br>"
+            f"Impeller system: "
+            f"{impeller_names}<br>"
+            f"<i>Parametric flow model – "
+            f"not CFD</i>"
+        ),
+        x=0.985,
+        y=0.025,
+        xref="paper",
+        yref="paper",
+        xanchor="right",
+        yanchor="bottom",
+        showarrow=False,
+        align="right",
+        bgcolor=(
+            "rgba(255,255,255,0.82)"
+        ),
+        bordercolor="#B8C4CC",
+        borderwidth=1,
+        font=dict(
+            size=11,
+        ),
+    )
+
+    # ========================================================
+    # FINAL LAYOUT
+    # ========================================================
+
     fig.update_layout(
         title=dict(
-            text=(
-                "3D Reactor Equipment Model"
-                f"<br><sup>"
-                f"ID = {D:.2f} m | "
-                f"Liquid Height = {liquid_z:.2f} m | "
-                f"{rpm:.0f} RPM"
-                f"</sup>"
-            ),
+            text=title_text,
             x=0.5,
             xanchor="center",
         ),
-
-        # ====================================================
-        # 3D SCENE
-        # ====================================================
 
         scene=dict(
 
@@ -2479,8 +3736,8 @@ def create_reactor_animation(
                 y=1,
                 z=max(
                     1.15,
-                    total_height /
-                    max(
+                    total_height
+                    / max(
                         D,
                         0.1,
                     ),
@@ -2501,22 +3758,14 @@ def create_reactor_animation(
             ),
         ),
 
-        # ====================================================
-        # SIZE
-        # ====================================================
-
-        height=760,
+        height=800,
 
         margin=dict(
             l=0,
             r=0,
-            t=80,
+            t=85,
             b=0,
         ),
-
-        # ====================================================
-        # LEGEND
-        # ====================================================
 
         legend=dict(
             orientation="h",
@@ -2524,30 +3773,23 @@ def create_reactor_animation(
             y=1.01,
             xanchor="left",
             x=0,
-            bgcolor="rgba(255,255,255,0.75)",
+            bgcolor=(
+                "rgba(255,255,255,0.78)"
+            ),
         ),
-
-        # ====================================================
-        # HOVER
-        # ====================================================
 
         hoverlabel=dict(
             bgcolor="white",
             font_size=12,
         ),
 
-        # ====================================================
-        # PAPER
-        # ====================================================
-
         paper_bgcolor="white",
         plot_bgcolor="white",
 
-        # ====================================================
-        # DRAG MODE
-        # ====================================================
-
         scene_dragmode="orbit",
+
+        # Performance
+        uirevision="reactor_mixing_model",
     )
 
     return fig
