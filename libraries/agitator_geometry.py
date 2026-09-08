@@ -1,65 +1,139 @@
 """
-Agitator engineering database.
+Agitator reference database.
 
-Values are screening-level typical values.
-Final design must use validated vendor/literature data.
+IMPORTANT:
+Np/Nq are screening/reference values.
+For final design, replace them with geometry-specific
+vendor/literature/test data.
 """
 
 AGITATORS = {
 
-    "Rushton Turbine": {
-        "Np": 5.0,
-        "Nq": 0.75,
-        "D_T": 0.33,
-        "flow": "Radial",
-        "description": "High-shear radial-flow turbine; gas dispersion and gas-liquid service.",
-    },
-
-    "Pitched Blade Turbine": {
-        "Np": 1.50,
-        "Nq": 0.75,
+    "Pitched Blade Turbine 45° Down": {
+        "description": "45° pitched-blade turbine, downward pumping",
+        "flow": "Mixed / Axial",
+        "direction": "Down-pumping",
+        "blades": 4,
+        "blade_angle_deg": 45,
         "D_T": 0.40,
-        "flow": "Mixed",
-        "description": "General-purpose mixed-flow agitator.",
+        "Np": 1.30,
+        "Nq": 0.85,
+        "Kblend": 5.0,
+        "application": "General blending, liquid-liquid, solids suspension",
+        "viscosity": "Low-Medium",
+        "gas_liquid": "Good",
+        "solid_liquid": "Good",
+        "description_short": "Versatile mixed-flow impeller",
     },
 
     "Hydrofoil": {
-        "Np": 0.35,
-        "Nq": 0.70,
-        "D_T": 0.40,
+        "description": "High-efficiency axial-flow hydrofoil",
         "flow": "Axial",
-        "description": "High pumping / low power axial-flow impeller.",
+        "direction": "Down-pumping",
+        "blades": 3,
+        "blade_angle_deg": 20,
+        "D_T": 0.40,
+        "Np": 0.30,
+        "Nq": 0.65,
+        "Kblend": 4.5,
+        "application": "Bulk circulation, blending, solids suspension",
+        "viscosity": "Low-Medium",
+        "gas_liquid": "Good",
+        "solid_liquid": "Excellent",
+        "description_short": "High pumping / low power",
+    },
+
+    "Rushton Turbine": {
+        "description": "Six-blade radial-flow disk turbine",
+        "flow": "Radial",
+        "direction": "Radial",
+        "blades": 6,
+        "blade_angle_deg": 90,
+        "D_T": 0.33,
+        "Np": 5.0,
+        "Nq": 0.75,
+        "Kblend": 6.0,
+        "application": "Gas dispersion, high shear dispersion",
+        "viscosity": "Low",
+        "gas_liquid": "Excellent",
+        "solid_liquid": "Moderate",
+        "description_short": "High radial shear / gas dispersion",
     },
 
     "Marine Propeller": {
+        "description": "Three-blade marine propeller",
+        "flow": "Axial",
+        "direction": "Axial",
+        "blades": 3,
+        "blade_angle_deg": 20,
+        "D_T": 0.35,
         "Np": 0.50,
         "Nq": 0.60,
-        "D_T": 0.35,
-        "flow": "Axial",
-        "description": "Low-viscosity axial-flow application.",
+        "Kblend": 4.0,
+        "application": "Low-viscosity circulation and blending",
+        "viscosity": "Low",
+        "gas_liquid": "Good",
+        "solid_liquid": "Moderate",
+        "description_short": "Efficient axial circulation",
     },
 
     "Anchor": {
-        "Np": 2.00,
-        "Nq": 0.30,
-        "D_T": 0.85,
+        "description": "Close-clearance anchor agitator",
         "flow": "Tangential",
-        "description": "High-viscosity and wall-sweeping service.",
+        "direction": "Tangential",
+        "blades": 2,
+        "blade_angle_deg": 0,
+        "D_T": 0.85,
+        "Np": 2.0,
+        "Nq": 0.30,
+        "Kblend": 8.0,
+        "application": "High-viscosity mixing and wall heat transfer",
+        "viscosity": "Medium-High",
+        "gas_liquid": "Poor",
+        "solid_liquid": "Moderate",
+        "description_short": "Close-clearance viscous mixing",
     },
 
     "Helical Ribbon": {
-        "Np": 1.00,
-        "Nq": 0.25,
+        "description": "Close-clearance helical ribbon",
+        "flow": "Axial / Tangential",
+        "direction": "Axial",
+        "blades": 1,
+        "blade_angle_deg": 0,
         "D_T": 0.90,
-        "flow": "Axial/Tangential",
-        "description": "Very high-viscosity mixing.",
+        "Np": 1.0,
+        "Nq": 0.25,
+        "Kblend": 10.0,
+        "application": "Very high viscosity systems",
+        "viscosity": "High-Very High",
+        "gas_liquid": "Poor",
+        "solid_liquid": "Moderate",
+        "description_short": "Very high viscosity mixing",
     },
 
-    "RCI": {
+    "RCI / Retreat Curve Impeller": {
+        "description": "Retreat curve impeller / RCI",
+        "flow": "Axial / Mixed",
+        "direction": "Down-pumping",
+        "blades": 3,
+        "blade_angle_deg": 30,
+        "D_T": 0.45,
         "Np": None,
         "Nq": None,
-        "D_T": 0.45,
-        "flow": "Vendor-specific",
-        "description": "Use validated vendor/literature performance data.",
+        "Kblend": None,
+        "application": "Specialized mixing service",
+        "viscosity": "Low-Medium",
+        "gas_liquid": "Good",
+        "solid_liquid": "Good",
+        "description_short": "Vendor/literature data required",
     },
 }
+
+
+def get_agitator(name):
+    """Return agitator specification."""
+    return AGITATORS.get(name, {})
+
+
+def agitator_names():
+    return list(AGITATORS.keys())
