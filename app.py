@@ -1,3 +1,5 @@
+import copy
+import json
 import math
 import sys
 from pathlib import Path
@@ -7,7 +9,7 @@ import streamlit as st
 
 
 # ============================================================
-# PATH
+# PATH CONFIGURATION
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -17,7 +19,7 @@ if str(BASE_DIR) not in sys.path:
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -29,31 +31,43 @@ st.set_page_config(
 
 
 # ============================================================
-# IMPORTS
+# MODULE IMPORTS
 # ============================================================
+
+# ---------------- ENGINE ----------------
 
 try:
     from calculations.engine import calculate_reactor
 except Exception as e:
-    st.error(f"Unable to load calculations/engine.py: {e}")
+    st.error("Unable to load calculations/engine.py")
+    st.code(f"{type(e).__name__}: {e}")
     st.stop()
 
+
+# ---------------- AGITATOR DATABASE ----------------
 
 try:
     from libraries.agitator_geometry import AGITATORS
 except Exception as e:
-    st.error(f"Unable to load libraries/agitator_geometry.py: {e}")
+    st.error("Unable to load libraries/agitator_geometry.py")
+    st.code(f"{type(e).__name__}: {e}")
     st.stop()
 
+
+# ---------------- 3D VISUALIZATION ----------------
 
 try:
     from visualization.reactor_3d import create_reactor_animation
 except Exception as e:
-    st.error(f"Unable to load visualization/reactor_3d.py: {e}")
-    st.stop()
+    create_reactor_animation = None
+    st.warning(
+        "3D visualization module could not be loaded. "
+        "The remaining dashboard will continue to operate."
+    )
 
 
-# Optional modules
+# ---------------- REACTOR GEOMETRY ----------------
+
 try:
     from libraries.reactor_geometry import (
         REACTOR_HEADS,
@@ -65,7 +79,7 @@ except Exception:
     REACTOR_HEADS = {
         "Flat": {},
         "2:1 Ellipsoidal": {},
-        "Torispherical": {},
+        "10% Torispherical": {},
     }
 
     def calculate_total_volume(
@@ -74,27 +88,33 @@ except Exception:
         bottom_type=None,
         top_type=None,
     ):
-        """
-        Fallback vessel volume calculation.
-        """
-
         D = float(diameter_m)
         H = float(straight_height_m)
 
-        cylindrical_volume = (
-            math.pi / 4.0 * D**2 * H
-        )
+        if D <= 0 or H <= 0:
+            return 0.0
 
-        # Approximate heads
+        cylindrical_volume = math.pi * D**2 * H / 4.0
+
         head_volume = 0.0
 
-        if bottom_type and "ellipsoidal" in str(bottom_type).lower():
+        bottom_name = str(bottom_type or "").lower()
+        top_name = str(top_type or "").lower()
+
+        if "ellipsoidal" in bottom_name:
             head_volume += math.pi * D**3 / 24.0
 
-        if top_type and "ellipsoidal" in str(top_type).lower():
+        elif "torispherical" in bottom_name:
+            head_volume += math.pi * D**3 / 40.0
+
+        if "ellipsoidal" in top_name:
             head_volume += math.pi * D**3 / 24.0
+
+        elif "torispherical" in top_name:
+            head_volume += math.pi * D**3 / 40.0
 
         return cylindrical_volume + head_volume
+
 
     def liquid_height_from_volume(
         volume_m3,
@@ -103,21 +123,28 @@ except Exception:
         bottom_type=None,
         top_type=None,
     ):
-        """
-        Fallback approximation.
-        """
-
         D = float(diameter_m)
         H = float(straight_height_m)
         V = float(volume_m3)
 
+        if D <= 0 or H <= 0 or V <= 0:
+            return 0.05
+
         area = math.pi * D**2 / 4.0
 
         if area <= 0:
-            return 0.0
+            return 0.05
 
-        return min(H, max(0.0, V / area))
+        return min(
+            H,
+            max(
+                0.05,
+                V / area,
+            ),
+        )
 
+
+# ---------------- SCALE-UP ----------------
 
 try:
     from calculations.scaleup import calculate_scaleup
@@ -125,11 +152,15 @@ except Exception:
     calculate_scaleup = None
 
 
+# ---------------- VALIDATION ----------------
+
 try:
     from calculations.validation import validate_reactor
 except Exception:
     validate_reactor = None
 
+
+# ---------------- REPORTING ----------------
 
 try:
     from reporting.report_generator import (
@@ -147,58 +178,43 @@ except Exception:
 
 st.markdown(
     """
-    <style>
+<style>
 
-    .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
-        margin-bottom: 0.1rem;
-    }
+.main-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.1rem;
+}
 
-    .subtitle {
-        color: #666666;
-        font-size: 1rem;
-        margin-bottom: 1rem;
-    }
+.subtitle {
+    color: #666666;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
 
-    .section-title {
-        font-size: 1.35rem;
-        font-weight: 650;
-        margin-top: 0.8rem;
-        margin-bottom: 0.5rem;
-    }
+.section-title {
+    font-size: 1.35rem;
+    font-weight: 650;
+    margin-top: 0.8rem;
+    margin-bottom: 0.5rem;
+}
 
-    .metric-card {
-        border: 1px solid #DDDDDD;
-        border-radius: 10px;
-        padding: 12px;
-        background: #FAFAFA;
-        margin-bottom: 8px;
-    }
+.metric-card {
+    border: 1px solid #DDDDDD;
+    border-radius: 10px;
+    padding: 12px;
+    background: #FAFAFA;
+    margin-bottom: 8px;
+}
 
-    .status-ok {
-        color: #17823B;
-        font-weight: 700;
-    }
-
-    .status-warning {
-        color: #B26A00;
-        font-weight: 700;
-    }
-
-    .status-error {
-        color: #B42318;
-        font-weight: 700;
-    }
-
-    </style>
-    """,
+</style>
+""",
     unsafe_allow_html=True,
 )
 
 
 # ============================================================
-# HELPERS
+# GENERAL HELPERS
 # ============================================================
 
 def safe_float(value, default=0.0):
@@ -209,7 +225,12 @@ def safe_float(value, default=0.0):
         if isinstance(value, str):
             value = value.strip()
 
-        return float(value)
+        result = float(value)
+
+        if not math.isfinite(result):
+            return default
+
+        return result
 
     except (TypeError, ValueError):
         return default
@@ -227,12 +248,12 @@ def fmt(value, digits=3):
         return "—"
 
     try:
-        value = float(value)
+        number = float(value)
 
-        if not math.isfinite(value):
+        if not math.isfinite(number):
             return "—"
 
-        return f"{value:,.{digits}f}"
+        return f"{number:,.{digits}f}"
 
     except (TypeError, ValueError):
         return str(value)
@@ -240,35 +261,122 @@ def fmt(value, digits=3):
 
 def safe_dataframe(df):
     """
-    Prevent Streamlit/PyArrow errors caused by mixed
-    object columns.
+    Converts object columns to strings to avoid
+    Streamlit/PyArrow serialization errors.
     """
 
     if df is None:
         return pd.DataFrame()
 
+    if not isinstance(df, pd.DataFrame):
+        df = pd.DataFrame(df)
+
     out = df.copy()
 
-    for col in out.columns:
+    for column in out.columns:
 
-        if str(out[col].dtype) == "object":
-            out[col] = out[col].astype("string")
+        if str(out[column].dtype) == "object":
+
+            out[column] = out[column].map(
+                lambda x: (
+                    ""
+                    if x is None
+                    else str(x)
+                )
+            ).astype("string")
 
     return out
 
 
 def get_value(data, *keys, default=None):
 
+    if not isinstance(data, dict):
+        return default
+
     for key in keys:
 
-        if isinstance(data, dict) and key in data:
-
-            value = data[key]
-
-            if value is not None:
-                return value
+        if key in data and data[key] is not None:
+            return data[key]
 
     return default
+
+
+# ============================================================
+# REPORT DATA SANITIZATION
+# ============================================================
+
+def make_report_safe(data):
+    """
+    Creates a deep copy of the dictionary and converts
+    nested dictionaries/lists into JSON strings.
+
+    This prevents errors such as:
+
+        ValueError:
+        Cannot convert {...} to Excel
+
+    when a report generator tries to write a dictionary
+    directly into an Excel cell.
+    """
+
+    if not isinstance(data, dict):
+        return {}
+
+    output = {}
+
+    for key, value in data.items():
+
+        if isinstance(value, dict):
+
+            output[key] = json.dumps(
+                value,
+                default=str,
+                ensure_ascii=False,
+            )
+
+        elif isinstance(value, list):
+
+            output[key] = json.dumps(
+                value,
+                default=str,
+                ensure_ascii=False,
+            )
+
+        else:
+
+            output[key] = value
+
+    return output
+
+
+def make_report_inputs(inputs):
+    """
+    Preserve the original input dictionary while also
+    providing a report-safe version.
+
+    The original impeller list is retained under
+    'impellers_original' so a report generator capable
+    of handling impeller tables can still use it.
+    """
+
+    if not isinstance(inputs, dict):
+        return {}
+
+    report_inputs = copy.deepcopy(inputs)
+
+    if "impellers" in report_inputs:
+
+        report_inputs["impellers_original"] = copy.deepcopy(
+            report_inputs["impellers"]
+        )
+
+        report_inputs["impellers"] = json.dumps(
+            report_inputs["impellers"],
+            default=str,
+            ensure_ascii=False,
+        )
+
+    return report_inputs
 
 
 # ============================================================
@@ -280,7 +388,14 @@ def get_agitator_names():
     if not isinstance(AGITATORS, dict):
         return []
 
-    return list(AGITATORS.keys())
+    names = []
+
+    for name, data in AGITATORS.items():
+
+        if isinstance(data, dict):
+            names.append(str(name))
+
+    return names
 
 
 def get_agitator_data(name):
@@ -300,28 +415,24 @@ def get_agitator_np(name):
 
     data = get_agitator_data(name)
 
-    value = data.get("np")
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    return safe_float(
+        data.get("np"),
+        default=None,
+    )
 
 
 def get_agitator_nq(name):
 
     data = get_agitator_data(name)
 
-    value = data.get("nq")
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    return safe_float(
+        data.get("nq"),
+        default=None,
+    )
 
 
 # ============================================================
-# IMPeller ELEVATION
+# IMPeller POSITION OPTIONS
 # ============================================================
 
 POSITION_OPTIONS = [
@@ -331,51 +442,52 @@ POSITION_OPTIONS = [
 ]
 
 
+# ============================================================
+# IMPeller ELEVATION CALCULATION
+# ============================================================
+
 def calculate_impeller_elevations(
     impellers,
     liquid_height_m,
     tank_diameter_m,
 ):
-    """
-    Converts user selected positions into actual elevations
-    from vessel bottom.
-
-    Bottom:
-        user-defined clearance
-
-    Middle:
-        approximately 50% of liquid height
-
-    Top:
-        approximately 75% of liquid height
-    """
 
     if not impellers:
         return []
 
-    result = []
-
     H = max(
-        safe_float(liquid_height_m, 0.0),
-        0.0,
+        safe_float(liquid_height_m),
+        0.05,
     )
 
     T = max(
-        safe_float(tank_diameter_m, 0.0),
-        0.0,
+        safe_float(tank_diameter_m),
+        0.10,
     )
+
+    result = []
 
     for item in impellers:
 
         data = dict(item)
 
         position = str(
-            data.get("position", "Bottom")
+            data.get(
+                "position",
+                "Bottom",
+            )
         )
 
         clearance = safe_float(
-            data.get("bottom_clearance_m"),
-            0.20 * T if T > 0 else 0.3,
+            data.get(
+                "bottom_clearance_m"
+            ),
+            0.20 * T,
+        )
+
+        clearance = max(
+            0.0,
+            clearance,
         )
 
         if position == "Bottom":
@@ -384,38 +496,40 @@ def calculate_impeller_elevations(
 
         elif position == "Middle":
 
-            elevation = max(
-                clearance,
-                0.50 * H,
-            )
+            elevation = 0.50 * H
 
         elif position == "Top":
 
-            elevation = max(
-                clearance,
-                0.75 * H,
-            )
+            elevation = 0.75 * H
 
         else:
 
             elevation = clearance
 
+        maximum_elevation = max(
+            0.05,
+            H - 0.05,
+        )
+
         elevation = min(
             elevation,
-            max(H - 0.05, 0.05),
+            maximum_elevation,
+        )
+
+        elevation = max(
+            0.0,
+            elevation,
         )
 
         data["elevation_m"] = elevation
 
-        # Alias for 3D module
         data["bottom_clearance_m"] = clearance
 
         result.append(data)
 
-    # Sort from bottom to top
     result.sort(
-        key=lambda x: safe_float(
-            x.get("elevation_m"),
+        key=lambda item: safe_float(
+            item.get("elevation_m"),
             0.0,
         )
     )
@@ -424,7 +538,7 @@ def calculate_impeller_elevations(
 
 
 # ============================================================
-# VALIDATE IMPELLER ARRANGEMENT
+# IMPeller CONFIGURATION VALIDATION
 # ============================================================
 
 def validate_impeller_configuration(
@@ -437,18 +551,30 @@ def validate_impeller_configuration(
 
     if not impellers:
 
-        messages.append(
+        return [
             (
                 "ERROR",
                 "At least one impeller is required.",
             )
-        )
+        ]
 
-        return messages
+    H = safe_float(
+        liquid_height_m,
+        0.0,
+    )
 
+    T = safe_float(
+        tank_diameter_m,
+        0.0,
+    )
+
+    positions = []
     elevations = []
 
-    for i, imp in enumerate(impellers, 1):
+    for i, imp in enumerate(
+        impellers,
+        1,
+    ):
 
         D = safe_float(
             imp.get("diameter_m"),
@@ -465,12 +591,31 @@ def validate_impeller_configuration(
             0.0,
         )
 
+        position = str(
+            imp.get(
+                "position",
+                "",
+            )
+        )
+
+        positions.append(position)
+        elevations.append(elevation)
+
         if D <= 0:
 
             messages.append(
                 (
                     "ERROR",
-                    f"Impeller {i}: diameter must be > 0.",
+                    f"Impeller {i}: diameter must be greater than zero.",
+                )
+            )
+
+        if T > 0 and D >= T:
+
+            messages.append(
+                (
+                    "ERROR",
+                    f"Impeller {i}: diameter must be smaller than tank diameter.",
                 )
             )
 
@@ -488,19 +633,43 @@ def validate_impeller_configuration(
             messages.append(
                 (
                     "ERROR",
-                    f"Impeller {i}: clearance cannot be negative.",
+                    f"Impeller {i}: bottom clearance cannot be negative.",
                 )
             )
 
-        elevations.append(elevation)
+        if H > 0 and elevation >= H:
 
-    # Duplicate elevation check
-    rounded = [
-        round(x, 4)
-        for x in elevations
+            messages.append(
+                (
+                    "ERROR",
+                    f"Impeller {i}: elevation is at or above liquid level.",
+                )
+            )
+
+    duplicate_positions = [
+        position
+        for position in set(positions)
+        if positions.count(position) > 1
     ]
 
-    if len(rounded) != len(set(rounded)):
+    if duplicate_positions:
+
+        messages.append(
+            (
+                "WARNING",
+                "Duplicate impeller position detected: "
+                + ", ".join(duplicate_positions),
+            )
+        )
+
+    rounded_elevations = [
+        round(value, 4)
+        for value in elevations
+    ]
+
+    if len(rounded_elevations) != len(
+        set(rounded_elevations)
+    ):
 
         messages.append(
             (
@@ -508,22 +677,6 @@ def validate_impeller_configuration(
                 "Two or more impellers have the same elevation.",
             )
         )
-
-    H = safe_float(
-        liquid_height_m,
-        0.0,
-    )
-
-    for i, elevation in enumerate(elevations, 1):
-
-        if H > 0 and elevation >= H:
-
-            messages.append(
-                (
-                    "ERROR",
-                    f"Impeller {i}: elevation is above liquid level.",
-                )
-            )
 
     if not messages:
 
@@ -544,7 +697,9 @@ def validate_impeller_configuration(
 def reactor_input_panel():
 
     st.markdown(
-        '<div class="section-title">1. Reactor & Process Inputs</div>',
+        '<div class="section-title">'
+        "1. Reactor & Process Inputs"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -621,32 +776,47 @@ def reactor_input_panel():
             step=1,
         )
 
+    # ========================================================
+    # VESSEL GEOMETRY
+    # ========================================================
+
     st.markdown(
-        '<div class="section-title">2. Vessel Geometry</div>',
+        '<div class="section-title">'
+        "2. Vessel Geometry"
+        "</div>",
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns(3)
-
-    head_names = list(REACTOR_HEADS.keys())
+    head_names = list(
+        REACTOR_HEADS.keys()
+    )
 
     if not head_names:
+
         head_names = [
             "Flat",
             "2:1 Ellipsoidal",
-            "Torispherical",
+            "10% Torispherical",
         ]
+
+    default_head = (
+        "2:1 Ellipsoidal"
+        if "2:1 Ellipsoidal" in head_names
+        else head_names[0]
+    )
+
+    default_index = head_names.index(
+        default_head
+    )
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
 
         bottom_type = st.selectbox(
             "Bottom Head",
             head_names,
-            index=(
-                head_names.index("2:1 Ellipsoidal")
-                if "2:1 Ellipsoidal" in head_names
-                else 0
-            ),
+            index=default_index,
         )
 
     with col2:
@@ -654,11 +824,7 @@ def reactor_input_panel():
         top_type = st.selectbox(
             "Top Head",
             head_names,
-            index=(
-                head_names.index("2:1 Ellipsoidal")
-                if "2:1 Ellipsoidal" in head_names
-                else 0
-            ),
+            index=default_index,
         )
 
     with col3:
@@ -668,9 +834,9 @@ def reactor_input_panel():
             value=True,
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # VESSEL VOLUME
-    # --------------------------------------------------------
+    # ========================================================
 
     vessel_volume = None
 
@@ -685,7 +851,7 @@ def reactor_input_panel():
                 top_type=top_type,
             )
 
-        except Exception:
+        except TypeError:
 
             try:
 
@@ -698,23 +864,45 @@ def reactor_input_panel():
 
             except Exception:
 
-                vessel_volume = (
-                    math.pi
-                    / 4.0
-                    * tank_diameter**2
-                    * straight_height
-                )
+                vessel_volume = None
 
-    if vessel_volume:
+        except Exception:
 
-        st.info(
-            f"Estimated vessel volume: "
-            f"**{fmt(vessel_volume, 2)} m³**"
+            vessel_volume = None
+
+    if vessel_volume is None:
+
+        vessel_volume = (
+            math.pi
+            / 4.0
+            * tank_diameter**2
+            * straight_height
         )
 
-    # --------------------------------------------------------
+    vessel_volume = safe_float(
+        vessel_volume,
+        0.0,
+    )
+
+    st.info(
+        "Estimated vessel volume: "
+        f"**{fmt(vessel_volume, 2)} m³**"
+    )
+
+    # ========================================================
+    # WORKING VOLUME CHECK
+    # ========================================================
+
+    if working_volume > vessel_volume:
+
+        st.error(
+            "Working volume exceeds estimated vessel volume. "
+            "Please increase vessel dimensions or reduce working volume."
+        )
+
+    # ========================================================
     # LIQUID HEIGHT
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
 
@@ -726,37 +914,71 @@ def reactor_input_panel():
             top_type=top_type,
         )
 
+    except TypeError:
+
+        try:
+
+            liquid_height = liquid_height_from_volume(
+                working_volume,
+                tank_diameter,
+                straight_height,
+                bottom_type,
+                top_type,
+            )
+
+        except Exception:
+
+            liquid_height = None
+
     except Exception:
 
-        liquid_height = min(
-            straight_height,
-            working_volume
-            / (
-                math.pi
-                / 4.0
-                * tank_diameter**2
-            ),
+        liquid_height = None
+
+    if liquid_height is None:
+
+        area = (
+            math.pi
+            * tank_diameter**2
+            / 4.0
         )
 
-    liquid_height = max(
+        if area > 0:
+
+            liquid_height = min(
+                straight_height,
+                working_volume / area,
+            )
+
+        else:
+
+            liquid_height = 0.05
+
+    liquid_height = safe_float(
+        liquid_height,
         0.05,
-        safe_float(
+    )
+
+    liquid_height = min(
+        straight_height,
+        max(
+            0.05,
             liquid_height,
-            straight_height * 0.7,
         ),
     )
 
     st.info(
-        f"Calculated liquid height: "
+        "Calculated liquid height: "
         f"**{fmt(liquid_height, 2)} m**"
     )
 
     # ========================================================
-    # AGITATION
+    # MULTI-IMPELLER
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">3. Multi-Impeller Agitation</div>',
+        '<div class="section-title">'
+        "3. Multi-Impeller Agitation"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -765,14 +987,16 @@ def reactor_input_panel():
     if not agitator_names:
 
         st.error(
-            "No agitators found in AGITATORS database."
+            "No valid agitators were found in AGITATORS."
         )
 
         st.stop()
 
     impellers = []
 
-    for i in range(int(number_impellers)):
+    for i in range(
+        int(number_impellers)
+    ):
 
         st.markdown(
             f"**Impeller {i + 1}**"
@@ -799,13 +1023,25 @@ def reactor_input_panel():
 
         with c3:
 
-            default_D = 0.5 * tank_diameter
+            default_D = max(
+                0.05,
+                0.50 * tank_diameter,
+            )
+
+            max_D = max(
+                0.06,
+                0.95 * tank_diameter,
+            )
 
             D = st.number_input(
                 "Impeller Diameter (m)",
                 min_value=0.01,
+                max_value=float(max_D),
                 value=float(
-                    max(0.05, default_D)
+                    min(
+                        default_D,
+                        max_D,
+                    )
                 ),
                 step=0.05,
                 key=f"impeller_diameter_{i}",
@@ -813,17 +1049,21 @@ def reactor_input_panel():
 
         with c4:
 
-            clearance_default = (
-                0.20 * tank_diameter
+            clearance_default = max(
+                0.05,
+                0.20 * tank_diameter,
             )
 
             clearance = st.number_input(
                 "Bottom Clearance (m)",
                 min_value=0.0,
                 value=float(
-                    max(
-                        0.05,
+                    min(
                         clearance_default,
+                        max(
+                            0.05,
+                            liquid_height - 0.05,
+                        ),
                     )
                 ),
                 step=0.05,
@@ -841,9 +1081,9 @@ def reactor_input_panel():
             }
         )
 
-    # --------------------------------------------------------
-    # ACTUAL ELEVATIONS
-    # --------------------------------------------------------
+    # ========================================================
+    # ELEVATIONS
+    # ========================================================
 
     impellers = calculate_impeller_elevations(
         impellers,
@@ -851,29 +1091,50 @@ def reactor_input_panel():
         tank_diameter,
     )
 
-    arrangement_messages = validate_impeller_configuration(
-        impellers,
-        liquid_height,
-        tank_diameter,
+    arrangement_messages = (
+        validate_impeller_configuration(
+            impellers,
+            liquid_height,
+            tank_diameter,
+        )
     )
 
     for level, message in arrangement_messages:
 
         if level == "ERROR":
+
             st.error(message)
 
         elif level == "WARNING":
+
             st.warning(message)
 
         else:
+
             st.success(message)
 
-    # --------------------------------------------------------
-    # GAS LIQUID
-    # --------------------------------------------------------
+    # ========================================================
+    # ENGINE LIMITATION NOTICE
+    # ========================================================
+
+    if len(impellers) > 1:
+
+        st.info(
+            "Engineering note: the current engine.py uses the "
+            "primary/bottom impeller's Np and Nq correlations "
+            "and applies the configured impeller count. "
+            "The 3D visualization displays each selected impeller "
+            "individually."
+        )
+
+    # ========================================================
+    # GAS-LIQUID
+    # ========================================================
 
     st.markdown(
-        '<div class="section-title">4. Gas–Liquid Inputs</div>',
+        '<div class="section-title">'
+        "4. Gas–Liquid Inputs"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -927,69 +1188,113 @@ def reactor_input_panel():
     return {
         "working_volume_m3": working_volume,
         "volume_m3": working_volume,
+
         "tank_diameter_m": tank_diameter,
         "diameter_m": tank_diameter,
+
         "straight_height_m": straight_height,
         "liquid_height_m": liquid_height,
+
         "density_kg_m3": density,
+
         "viscosity_cp": viscosity_cp,
         "viscosity_pa_s": viscosity_cp * 0.001,
+
         "surface_tension_mN_m": surface_tension,
         "surface_tension_n_m": surface_tension * 0.001,
+
         "rpm": rpm,
-        "number_impellers": int(number_impellers),
-        "number_baffles": int(number_baffles),
+
+        "number_impellers": int(
+            number_impellers
+        ),
+
+        "number_baffles": int(
+            number_baffles
+        ),
+
         "bottom_type": bottom_type,
         "top_type": top_type,
+
         "vessel_volume_m3": vessel_volume,
+
         "impellers": impellers,
-        "agitator": impellers[0]["agitator_type"],
-        "impeller_diameter_m": impellers[0]["diameter_m"],
-        "impeller_clearance_m": impellers[0]["bottom_clearance_m"],
+
+        "agitator": impellers[0][
+            "agitator_type"
+        ],
+
+        "impeller_diameter_m": impellers[0][
+            "diameter_m"
+        ],
+
+        "impeller_clearance_m": impellers[0][
+            "bottom_clearance_m"
+        ],
+
         "gas_flow_m3_h": gas_flow,
+
         "bubble_diameter_mm": bubble_diameter,
+
         "gas_holdup_fraction": gas_holdup,
     }
 
 
 # ============================================================
-# CALCULATION ADAPTER
+# ENGINE CALCULATION ADAPTER
 # ============================================================
 
 def calculate_reactor_case(inputs):
 
+    if not isinstance(inputs, dict):
+
+        raise ValueError(
+            "Reactor inputs are invalid."
+        )
+
     volume_m3 = safe_float(
-        inputs.get("working_volume_m3"),
-        0.0,
+        inputs.get(
+            "working_volume_m3"
+        )
     )
 
     tank_diameter_m = safe_float(
-        inputs.get("tank_diameter_m"),
-        0.0,
+        inputs.get(
+            "tank_diameter_m"
+        )
     )
 
     liquid_height_m = safe_float(
-        inputs.get("liquid_height_m"),
-        0.0,
+        inputs.get(
+            "liquid_height_m"
+        )
     )
 
     density_kg_m3 = safe_float(
-        inputs.get("density_kg_m3"),
+        inputs.get(
+            "density_kg_m3"
+        ),
         1000.0,
     )
 
     viscosity_pa_s = safe_float(
-        inputs.get("viscosity_pa_s"),
+        inputs.get(
+            "viscosity_pa_s"
+        ),
         0.001,
     )
 
     surface_tension_n_m = safe_float(
-        inputs.get("surface_tension_n_m"),
+        inputs.get(
+            "surface_tension_n_m"
+        ),
         0.03,
     )
 
     rpm = safe_float(
-        inputs.get("rpm"),
+        inputs.get(
+            "rpm"
+        ),
         100.0,
     )
 
@@ -998,13 +1303,25 @@ def calculate_reactor_case(inputs):
         [],
     )
 
-    if not impellers:
+    if not isinstance(
+        impellers,
+        list,
+    ) or not impellers:
 
         raise ValueError(
             "No impeller configuration found."
         )
 
     primary_impeller = impellers[0]
+
+    if not isinstance(
+        primary_impeller,
+        dict,
+    ):
+
+        raise ValueError(
+            "Primary impeller configuration is invalid."
+        )
 
     agitator = primary_impeller.get(
         "agitator_type",
@@ -1019,12 +1336,20 @@ def calculate_reactor_case(inputs):
             "Agitator type is not defined."
         )
 
+    if agitator not in AGITATORS:
+
+        raise ValueError(
+            f"Agitator '{agitator}' is not present "
+            "in AGITATORS database."
+        )
+
     impeller_diameter_m = safe_float(
         primary_impeller.get(
             "diameter_m",
-            primary_impeller.get("D"),
-        ),
-        0.0,
+            primary_impeller.get(
+                "D"
+            ),
+        )
     )
 
     number_impellers = safe_int(
@@ -1050,44 +1375,73 @@ def calculate_reactor_case(inputs):
         0.20 * tank_diameter_m,
     )
 
+    # ========================================================
+    # BASIC VALIDATION
+    # ========================================================
+
     if volume_m3 <= 0:
+
         raise ValueError(
             "Working volume must be greater than zero."
         )
 
     if tank_diameter_m <= 0:
+
         raise ValueError(
             "Tank diameter must be greater than zero."
         )
 
     if liquid_height_m <= 0:
+
         raise ValueError(
             "Liquid height must be greater than zero."
         )
 
     if density_kg_m3 <= 0:
+
         raise ValueError(
             "Density must be greater than zero."
         )
 
     if viscosity_pa_s <= 0:
+
         raise ValueError(
             "Viscosity must be greater than zero."
         )
 
+    if surface_tension_n_m <= 0:
+
+        raise ValueError(
+            "Surface tension must be greater than zero."
+        )
+
     if rpm <= 0:
+
         raise ValueError(
             "RPM must be greater than zero."
         )
 
     if impeller_diameter_m <= 0:
+
         raise ValueError(
             "Impeller diameter must be greater than zero."
         )
 
-    # --------------------------------------------------------
+    if impeller_diameter_m >= tank_diameter_m:
+
+        raise ValueError(
+            "Impeller diameter must be smaller than tank diameter."
+        )
+
+    if number_impellers < 1:
+
+        raise ValueError(
+            "Number of impellers must be at least 1."
+        )
+
+    # ========================================================
     # CALL ENGINE
-    # --------------------------------------------------------
+    # ========================================================
 
     result = calculate_reactor(
 
@@ -1135,13 +1489,26 @@ def calculate_reactor_case(inputs):
         ),
     )
 
-    # --------------------------------------------------------
-    # ADD UI / GEOMETRY DATA
-    # --------------------------------------------------------
+    if not isinstance(
+        result,
+        dict,
+    ):
+
+        raise ValueError(
+            "calculations.engine.calculate_reactor() "
+            "did not return a dictionary."
+        )
+
+    # ========================================================
+    # ADD DASHBOARD DATA NOT RETURNED BY ENGINE
+    # ========================================================
+
+    result["rpm"] = rpm
 
     result["straight_height_m"] = safe_float(
-        inputs.get("straight_height_m"),
-        0.0,
+        inputs.get(
+            "straight_height_m"
+        )
     )
 
     result["bottom_type"] = inputs.get(
@@ -1153,14 +1520,26 @@ def calculate_reactor_case(inputs):
     )
 
     result["number_baffles"] = safe_int(
-        inputs.get("number_baffles"),
+        inputs.get(
+            "number_baffles"
+        ),
         4,
     )
 
-    result["impellers"] = impellers
+    result["impellers"] = copy.deepcopy(
+        impellers
+    )
 
-    result["vessel_volume_m3"] = inputs.get(
-        "vessel_volume_m3"
+    result["vessel_volume_m3"] = safe_float(
+        inputs.get(
+            "vessel_volume_m3"
+        )
+    )
+
+    result["working_volume_m3"] = volume_m3
+
+    result["surface_tension_n_m"] = (
+        surface_tension_n_m
     )
 
     return result
@@ -1172,32 +1551,38 @@ def calculate_reactor_case(inputs):
 
 def show_performance(result):
 
-    st.subheader("Reactor Mixing Performance")
+    st.subheader(
+        "Reactor Mixing Performance"
+    )
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
+
         st.metric(
             "Reynolds Number",
             fmt(
-                result.get("Re"),
+                result.get("reynolds_number"),
                 0,
             ),
         )
 
     with c2:
+
         st.metric(
             "Tip Speed",
             f"{fmt(result.get('tip_speed'), 2)} m/s",
         )
 
     with c3:
+
         st.metric(
             "Power",
             f"{fmt(result.get('power_kw'), 2)} kW",
         )
 
     with c4:
+
         st.metric(
             "Specific Power",
             f"{fmt(result.get('power_volume_kw_m3'), 3)} kW/m³",
@@ -1240,94 +1625,175 @@ def show_performance(result):
             ),
         )
 
-    st.subheader("Engineering Parameters")
+    st.subheader(
+        "Engineering Parameters"
+    )
 
-    performance_data = {
-
-        "Parameter": [
-            "Working Volume",
-            "Tank Diameter",
-            "Liquid Height",
-            "D/T",
-            "H/T",
-            "RPM",
-            "Impeller Diameter",
-            "Impeller Count",
-            "Reynolds Number",
-            "Froude Number",
-            "Tip Speed",
-            "Power",
-            "Power / Volume",
-            "Torque",
-            "Pumping Capacity",
-            "Pumping / Volume",
-            "Turnover Time",
-            "Mixing Regime",
-        ],
-
-        "Value": [
-
-            fmt(result.get("volume_m3"), 3),
-
-            fmt(
+    rows = [
+        {
+            "Parameter": "Working Volume",
+            "Value": fmt(
+                result.get("volume_m3"),
+                3,
+            ),
+            "Unit": "m³",
+        },
+        {
+            "Parameter": "Tank Diameter",
+            "Value": fmt(
                 result.get("tank_diameter_m"),
                 3,
             ),
-
-            fmt(
+            "Unit": "m",
+        },
+        {
+            "Parameter": "Liquid Height",
+            "Value": fmt(
                 result.get("liquid_height_m"),
                 3,
             ),
-
-            fmt(result.get("D_T"), 3),
-
-            fmt(result.get("H_T"), 3),
-
-            fmt(result.get("rpm"), 1),
-
-            fmt(
-                result.get("impeller_diameter_m"),
+            "Unit": "m",
+        },
+        {
+            "Parameter": "D/T",
+            "Value": fmt(
+                result.get("D_T"),
                 3,
             ),
-
-            result.get(
-                "number_impellers",
-                "—",
+            "Unit": "-",
+        },
+        {
+            "Parameter": "H/T",
+            "Value": fmt(
+                result.get("H_T"),
+                3,
             ),
-
-            fmt(
-                result.get("reynolds_number"),
+            "Unit": "-",
+        },
+        {
+            "Parameter": "RPM",
+            "Value": fmt(
+                result.get("rpm"),
+                1,
+            ),
+            "Unit": "rpm",
+        },
+        {
+            "Parameter": "Impeller Diameter",
+            "Value": fmt(
+                result.get(
+                    "impeller_diameter_m"
+                ),
+                3,
+            ),
+            "Unit": "m",
+        },
+        {
+            "Parameter": "Impeller Count",
+            "Value": str(
+                result.get(
+                    "number_impellers",
+                    "—",
+                )
+            ),
+            "Unit": "-",
+        },
+        {
+            "Parameter": "Reynolds Number",
+            "Value": fmt(
+                result.get(
+                    "reynolds_number"
+                ),
                 0,
             ),
-
-            fmt(
-                result.get("froude_number"),
+            "Unit": "-",
+        },
+        {
+            "Parameter": "Froude Number",
+            "Value": fmt(
+                result.get(
+                    "froude_number"
+                ),
                 4,
             ),
-
-            f"{fmt(result.get('tip_speed'), 3)} m/s",
-
-            f"{fmt(result.get('power_kw'), 3)} kW",
-
-            f"{fmt(result.get('power_volume_kw_m3'), 4)} kW/m³",
-
-            f"{fmt(result.get('torque_nm'), 2)} N·m",
-
-            f"{fmt(result.get('pumping_m3_h'), 2)} m³/h",
-
-            f"{fmt(result.get('pumping_per_volume'), 3)} 1/h",
-
-            f"{fmt(result.get('turnover_time_min'), 2)} min",
-
-            result.get(
-                "mixing_regime",
-                "—",
+            "Unit": "-",
+        },
+        {
+            "Parameter": "Tip Speed",
+            "Value": fmt(
+                result.get("tip_speed"),
+                3,
             ),
-        ],
-    }
+            "Unit": "m/s",
+        },
+        {
+            "Parameter": "Power",
+            "Value": fmt(
+                result.get("power_kw"),
+                3,
+            ),
+            "Unit": "kW",
+        },
+        {
+            "Parameter": "Power / Volume",
+            "Value": fmt(
+                result.get(
+                    "power_volume_kw_m3"
+                ),
+                4,
+            ),
+            "Unit": "kW/m³",
+        },
+        {
+            "Parameter": "Torque",
+            "Value": fmt(
+                result.get("torque_nm"),
+                2,
+            ),
+            "Unit": "N·m",
+        },
+        {
+            "Parameter": "Pumping Capacity",
+            "Value": fmt(
+                result.get("pumping_m3_h"),
+                2,
+            ),
+            "Unit": "m³/h",
+        },
+        {
+            "Parameter": "Pumping / Volume",
+            "Value": fmt(
+                result.get(
+                    "pumping_per_volume"
+                ),
+                3,
+            ),
+            "Unit": "1/h",
+        },
+        {
+            "Parameter": "Turnover Time",
+            "Value": fmt(
+                result.get(
+                    "turnover_time_min"
+                ),
+                2,
+            ),
+            "Unit": "min",
+        },
+        {
+            "Parameter": "Mixing Regime",
+            "Value": str(
+                result.get(
+                    "mixing_regime",
+                    "—",
+                )
+            ),
+            "Unit": "-",
+        },
+    ]
 
     df = safe_dataframe(
-        pd.DataFrame(performance_data)
+        pd.DataFrame(rows)
     )
 
     st.dataframe(
@@ -1343,7 +1809,9 @@ def show_performance(result):
 
 def show_impellers(result):
 
-    st.subheader("Impeller Arrangement")
+    st.subheader(
+        "Impeller Arrangement"
+    )
 
     impellers = result.get(
         "impellers",
@@ -1358,6 +1826,12 @@ def show_impellers(result):
 
         return
 
+    tank_diameter = safe_float(
+        result.get(
+            "tank_diameter_m"
+        )
+    )
+
     rows = []
 
     for i, imp in enumerate(
@@ -1367,50 +1841,53 @@ def show_impellers(result):
 
         agitator = imp.get(
             "agitator_type",
-            "Unknown",
+            imp.get(
+                "type",
+                "Unknown",
+            ),
         )
 
         D = safe_float(
-            imp.get("diameter_m"),
-            0.0,
+            imp.get(
+                "diameter_m",
+                imp.get("D"),
+            )
         )
 
         elevation = safe_float(
-            imp.get("elevation_m"),
-            0.0,
+            imp.get(
+                "elevation_m"
+            )
         )
 
-        np_value = get_agitator_np(
-            agitator
-        )
-
-        nq_value = get_agitator_nq(
-            agitator
+        D_T = (
+            D / tank_diameter
+            if tank_diameter > 0
+            else None
         )
 
         rows.append(
             {
                 "Impeller": i,
                 "Position": imp.get(
-                    "position"
+                    "position",
+                    "—",
                 ),
                 "Agitator": agitator,
                 "Diameter (m)": D,
-                "D/T": (
-                    D
-                    / result["tank_diameter_m"]
-                    if result["tank_diameter_m"] > 0
-                    else None
-                ),
+                "D/T": D_T,
                 "Elevation from Bottom (m)": elevation,
                 "Bottom Clearance (m)": safe_float(
                     imp.get(
                         "bottom_clearance_m"
-                    ),
-                    0.0,
+                    )
                 ),
-                "Np": np_value,
-                "Nq": nq_value,
+                "Np": get_agitator_np(
+                    agitator
+                ),
+                "Nq": get_agitator_nq(
+                    agitator
+                ),
             }
         )
 
@@ -1436,12 +1913,11 @@ def show_impellers(result):
                     len(impellers)
                 )
             ],
-            "Elevation": [
+            "Elevation (m)": [
                 safe_float(
                     imp.get(
                         "elevation_m"
-                    ),
-                    0.0,
+                    )
                 )
                 for imp in impellers
             ],
@@ -1605,30 +2081,33 @@ def show_validation(result):
     checks = []
 
     T = safe_float(
-        result.get("tank_diameter_m"),
-        0.0,
+        result.get(
+            "tank_diameter_m"
+        )
     )
 
     D = safe_float(
-        result.get("impeller_diameter_m"),
-        0.0,
+        result.get(
+            "impeller_diameter_m"
+        )
     )
 
     H = safe_float(
-        result.get("liquid_height_m"),
-        0.0,
+        result.get(
+            "liquid_height_m"
+        )
     )
 
     rpm = safe_float(
-        result.get("rpm"),
-        0.0,
+        result.get(
+            "rpm"
+        )
     )
 
-    # D/T
     D_T = (
         D / T
         if T > 0
-        else 0
+        else 0.0
     )
 
     if 0.25 <= D_T <= 0.70:
@@ -1638,7 +2117,7 @@ def show_validation(result):
                 "Check": "Impeller D/T",
                 "Result": "PASS",
                 "Value": f"{D_T:.3f}",
-                "Comment": "Within common preliminary range.",
+                "Comment": "Within common preliminary screening range.",
             }
         )
 
@@ -1653,11 +2132,10 @@ def show_validation(result):
             }
         )
 
-    # H/T
     H_T = (
         H / T
         if T > 0
-        else 0
+        else 0.0
     )
 
     checks.append(
@@ -1669,11 +2147,10 @@ def show_validation(result):
                 else "ERROR"
             ),
             "Value": f"{H_T:.3f}",
-            "Comment": "Check vessel aspect ratio.",
+            "Comment": "Review vessel aspect ratio.",
         }
     )
 
-    # RPM
     checks.append(
         {
             "Check": "Agitator RPM",
@@ -1687,7 +2164,6 @@ def show_validation(result):
         }
     )
 
-    # Power
     power = result.get(
         "power_kw"
     )
@@ -1701,13 +2177,46 @@ def show_validation(result):
                 else "REVIEW"
             ),
             "Value": (
-                f"{power:.3f} kW"
+                f"{safe_float(power):.3f} kW"
                 if power is not None
                 else "N/A"
             ),
             "Comment": "Requires valid Np in agitator database.",
         }
     )
+
+    # Working volume vs vessel volume
+
+    working_volume = safe_float(
+        result.get(
+            "volume_m3"
+        )
+    )
+
+    vessel_volume = safe_float(
+        result.get(
+            "vessel_volume_m3"
+        )
+    )
+
+    if vessel_volume > 0:
+
+        checks.append(
+            {
+                "Check": "Working / Vessel Volume",
+                "Result": (
+                    "PASS"
+                    if working_volume <= vessel_volume
+                    else "ERROR"
+                ),
+                "Value": (
+                    f"{working_volume / vessel_volume:.3f}"
+                ),
+                "Comment": (
+                    "Working volume fraction of estimated vessel volume."
+                ),
+            }
+        )
 
     df = safe_dataframe(
         pd.DataFrame(checks)
@@ -1718,6 +2227,8 @@ def show_validation(result):
         width="stretch",
         hide_index=True,
     )
+
+    # External validation module
 
     if validate_reactor is not None:
 
@@ -1751,7 +2262,9 @@ def show_validation(result):
 
                 rows = []
 
-                for key, value in validation_result.items():
+                for key, value in (
+                    validation_result.items()
+                ):
 
                     rows.append(
                         {
@@ -1777,7 +2290,7 @@ def show_validation(result):
         except Exception as e:
 
             st.warning(
-                f"Validation module could not be executed: "
+                "Validation module could not be executed: "
                 f"{type(e).__name__}: {e}"
             )
 
@@ -1793,9 +2306,8 @@ def show_scaleup(result):
     )
 
     st.info(
-        "Use the scale-up module for comparing "
-        "geometrically similar systems and maintaining "
-        "selected mixing criteria."
+        "Compare geometrically similar systems using "
+        "selected scale-up criteria."
     )
 
     if calculate_scaleup is None:
@@ -1842,7 +2354,10 @@ def show_scaleup(result):
                 "Constant Tip Speed",
                 "Constant RPM",
             ],
+            key="scale_basis",
         )
+
+    # Try positional API first
 
     try:
 
@@ -1865,7 +2380,7 @@ def show_scaleup(result):
         except Exception as e:
 
             st.warning(
-                f"Scale-up module interface differs from dashboard: "
+                "Scale-up module interface differs from dashboard: "
                 f"{type(e).__name__}: {e}"
             )
 
@@ -1874,25 +2389,54 @@ def show_scaleup(result):
     except Exception as e:
 
         st.warning(
-            f"Scale-up calculation failed: "
+            "Scale-up calculation failed: "
             f"{type(e).__name__}: {e}"
         )
 
         return
 
-    if isinstance(output, dict):
+    if isinstance(
+        output,
+        dict,
+    ):
 
-        rows = [
-            {
-                "Parameter": key,
-                "Value": str(value),
-            }
-            for key, value in output.items()
-        ]
+        rows = []
+
+        for key, value in output.items():
+
+            if isinstance(
+                value,
+                (dict, list),
+            ):
+
+                value = json.dumps(
+                    value,
+                    default=str,
+                )
+
+            rows.append(
+                {
+                    "Parameter": key,
+                    "Value": str(value),
+                }
+            )
 
         st.dataframe(
             safe_dataframe(
                 pd.DataFrame(rows)
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+    elif isinstance(
+        output,
+        pd.DataFrame,
+    ):
+
+        st.dataframe(
+            safe_dataframe(
+                output
             ),
             width="stretch",
             hide_index=True,
@@ -1904,7 +2448,7 @@ def show_scaleup(result):
 
 
 # ============================================================
-# 3D TAB
+# 3D REACTOR TAB
 # ============================================================
 
 def show_3d(result):
@@ -1917,6 +2461,14 @@ def show_3d(result):
         "Interactive engineering visualization of the "
         "selected reactor geometry and agitator arrangement."
     )
+
+    if create_reactor_animation is None:
+
+        st.error(
+            "visualization/reactor_3d.py could not be loaded."
+        )
+
+        return
 
     impellers = result.get(
         "impellers",
@@ -1967,8 +2519,15 @@ def show_3d(result):
             show_tracers=True,
 
             show_baffles=True,
-
         )
+
+        if fig is None:
+
+            st.error(
+                "3D module returned no figure."
+            )
+
+            return
 
         st.plotly_chart(
             fig,
@@ -1976,6 +2535,7 @@ def show_3d(result):
             config={
                 "displaylogo": False,
                 "scrollZoom": True,
+                "responsive": True,
             },
         )
 
@@ -2001,10 +2561,14 @@ def show_reports(inputs, result):
     )
 
     st.write(
-        "Generate a calculation report using the current reactor case."
+        "Generate Word and Excel reports using the current reactor case."
     )
 
     c1, c2 = st.columns(2)
+
+    # ========================================================
+    # WORD
+    # ========================================================
 
     with c1:
 
@@ -2023,23 +2587,35 @@ def show_reports(inputs, result):
                     result,
                 )
 
-                st.download_button(
-                    label="Download Word Report",
-                    data=word_file.getvalue(),
-                    file_name="reactor_scaleup_report.docx",
-                    mime=(
-                        "application/vnd.openxmlformats-officedocument."
-                        "wordprocessingml.document"
-                    ),
-                    width="stretch",
-                )
+                if word_file is not None:
+
+                    st.download_button(
+                        label="Download Word Report",
+                        data=word_file.getvalue(),
+                        file_name="reactor_scaleup_report.docx",
+                        mime=(
+                            "application/vnd.openxmlformats-officedocument."
+                            "wordprocessingml.document"
+                        ),
+                        width="stretch",
+                    )
+
+                else:
+
+                    st.error(
+                        "Word report generator returned no file."
+                    )
 
             except Exception as e:
 
                 st.error(
-                    f"Word report generation failed: "
+                    "Word report generation failed: "
                     f"{type(e).__name__}: {e}"
                 )
+
+    # ========================================================
+    # EXCEL
+    # ========================================================
 
     with c2:
 
@@ -2053,27 +2629,52 @@ def show_reports(inputs, result):
 
             try:
 
-                excel_file = create_excel_report(
-                    inputs,
-                    result,
+                # IMPORTANT:
+                # Use report-safe copies to prevent nested
+                # dictionary/list -> Excel conversion errors.
+
+                report_inputs = make_report_inputs(
+                    inputs
                 )
 
-                st.download_button(
-                    label="Download Excel Report",
-                    data=excel_file.getvalue(),
-                    file_name="reactor_scaleup_report.xlsx",
-                    mime=(
-                        "application/vnd.openxmlformats-officedocument."
-                        "spreadsheetml.sheet"
-                    ),
-                    width="stretch",
+                report_result = make_report_safe(
+                    result
                 )
+
+                excel_file = create_excel_report(
+                    report_inputs,
+                    report_result,
+                )
+
+                if excel_file is not None:
+
+                    st.download_button(
+                        label="Download Excel Report",
+                        data=excel_file.getvalue(),
+                        file_name="reactor_scaleup_report.xlsx",
+                        mime=(
+                            "application/vnd.openxmlformats-officedocument."
+                            "spreadsheetml.sheet"
+                        ),
+                        width="stretch",
+                    )
+
+                else:
+
+                    st.error(
+                        "Excel report generator returned no file."
+                    )
 
             except Exception as e:
 
                 st.error(
-                    f"Excel report generation failed: "
+                    "Excel report generation failed: "
                     f"{type(e).__name__}: {e}"
+                )
+
+                st.caption(
+                    "The Excel report requires the corrected "
+                    "reporting/report_generator.py module."
                 )
 
 
@@ -2095,17 +2696,17 @@ with st.sidebar:
 
     st.markdown(
         """
-        **Calculation Scope**
+**Calculation Scope**
 
-        • Reactor geometry  
-        • Mixing performance  
-        • Multi-impeller system  
-        • Gas–liquid transfer  
-        • Scale-up  
-        • Validation  
-        • 3D visualization  
-        • Engineering reports
-        """
+• Reactor geometry  
+• Mixing performance  
+• Multi-impeller system  
+• Gas–liquid transfer  
+• Scale-up  
+• Validation  
+• 3D visualization  
+• Engineering reports
+"""
     )
 
     st.divider()
@@ -2122,7 +2723,9 @@ with st.sidebar:
 # ============================================================
 
 st.markdown(
-    '<div class="main-title">🏭 Reactor Scale-Up & Mixing Dashboard</div>',
+    '<div class="main-title">'
+    "🏭 Reactor Scale-Up & Mixing Dashboard"
+    "</div>",
     unsafe_allow_html=True,
 )
 
@@ -2144,7 +2747,7 @@ inputs = reactor_input_panel()
 
 
 # ============================================================
-# CALCULATE
+# CALCULATE BUTTON
 # ============================================================
 
 st.divider()
@@ -2157,19 +2760,92 @@ calculate_clicked = st.button(
 
 
 # ============================================================
-# EXECUTE
+# EXECUTE CALCULATION
 # ============================================================
 
 if calculate_clicked:
 
     try:
 
+        # First perform impeller validation
+
+        arrangement_messages = (
+            validate_impeller_configuration(
+                inputs.get(
+                    "impellers",
+                    [],
+                ),
+                inputs.get(
+                    "liquid_height_m"
+                ),
+                inputs.get(
+                    "tank_diameter_m"
+                ),
+            )
+        )
+
+        hard_errors = [
+            message
+            for level, message in arrangement_messages
+            if level == "ERROR"
+        ]
+
+        if hard_errors:
+
+            st.error(
+                "Impeller configuration contains errors."
+            )
+
+            for message in hard_errors:
+
+                st.error(message)
+
+            st.stop()
+
+        # Working volume check
+
+        vessel_volume = safe_float(
+            inputs.get(
+                "vessel_volume_m3"
+            )
+        )
+
+        working_volume = safe_float(
+            inputs.get(
+                "working_volume_m3"
+            )
+        )
+
+        if (
+            vessel_volume > 0
+            and working_volume > vessel_volume
+        ):
+
+            st.error(
+                "Working volume exceeds estimated vessel volume."
+            )
+
+            st.stop()
+
+        # Main calculation
+
         result = calculate_reactor_case(
             inputs
         )
 
-        st.session_state["reactor_inputs"] = inputs
-        st.session_state["reactor_result"] = result
+        # Save session
+
+        st.session_state[
+            "reactor_inputs"
+        ] = copy.deepcopy(
+            inputs
+        )
+
+        st.session_state[
+            "reactor_result"
+        ] = copy.deepcopy(
+            result
+        )
 
         st.success(
             "Reactor calculation completed successfully."
@@ -2186,11 +2862,10 @@ if calculate_clicked:
         )
 
         st.info(
-            "Check the reactor dimensions, liquid properties, "
-            "RPM, impeller diameter and agitator database."
+            "Check reactor dimensions, liquid properties, "
+            "RPM, impeller diameter, impeller configuration "
+            "and agitator database."
         )
-
-        st.stop()
 
 
 # ============================================================
@@ -2229,11 +2904,19 @@ else:
         ]
     )
 
+    # ========================================================
+    # PERFORMANCE
+    # ========================================================
+
     with tabs[0]:
 
         show_performance(
             result
         )
+
+    # ========================================================
+    # IMPELLERS
+    # ========================================================
 
     with tabs[1]:
 
@@ -2241,11 +2924,19 @@ else:
             result
         )
 
+    # ========================================================
+    # GAS-LIQUID
+    # ========================================================
+
     with tabs[2]:
 
         show_gas_liquid(
             result
         )
+
+    # ========================================================
+    # SCALE-UP
+    # ========================================================
 
     with tabs[3]:
 
@@ -2253,17 +2944,29 @@ else:
             result
         )
 
+    # ========================================================
+    # VALIDATION
+    # ========================================================
+
     with tabs[4]:
 
         show_validation(
             result
         )
 
+    # ========================================================
+    # 3D
+    # ========================================================
+
     with tabs[5]:
 
         show_3d(
             result
         )
+
+    # ========================================================
+    # REPORTS
+    # ========================================================
 
     with tabs[6]:
 
