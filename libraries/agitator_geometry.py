@@ -1,101 +1,65 @@
 AGITATORS = {
 
     "Rushton Turbine": {
-        "description": "Radial-flow disk turbine",
-        "blades": 6,
-        "flow": "Radial",
+        "description": "Six-blade radial-flow disc turbine",
+        "flow_type": "Radial",
         "np": 5.0,
         "nq": 0.75,
-        "default_diameter_ratio": 0.33,
-        "recommended_for": [
-            "Gas-Liquid",
-            "Gas-Liquid-Solid",
-            "Dispersion",
-        ],
+        "recommended_d_t": (0.30, 0.50),
+        "gas_dispersion": True,
     },
 
-    "Pitched Blade Turbine": {
-        "description": "Four-blade pitched turbine",
-        "blades": 4,
-        "flow": "Mixed",
-        "np": 1.5,
-        "nq": 0.75,
-        "default_diameter_ratio": 0.40,
-        "recommended_for": [
-            "Liquid-Liquid",
-            "Solid-Liquid",
-            "Gas-Liquid",
-            "Crystallization",
-        ],
+    "Pitched Blade Turbine 45": {
+        "description": "Four/six-blade pitched blade turbine",
+        "flow_type": "Mixed",
+        "np": 1.27,
+        "nq": 0.79,
+        "recommended_d_t": (0.30, 0.60),
+        "gas_dispersion": True,
     },
 
     "Hydrofoil": {
-        "description": "High-efficiency axial-flow impeller",
-        "blades": 3,
-        "flow": "Axial",
-        "np": 0.35,
-        "nq": 0.70,
-        "default_diameter_ratio": 0.45,
-        "recommended_for": [
-            "Liquid-Liquid",
-            "Solid-Liquid",
-            "Low-viscosity blending",
-        ],
+        "description": "High-efficiency axial-flow hydrofoil",
+        "flow_type": "Axial",
+        "np": 0.30,
+        "nq": 0.55,
+        "recommended_d_t": (0.30, 0.60),
+        "gas_dispersion": False,
     },
 
     "Marine Propeller": {
-        "description": "Axial-flow propeller",
-        "blades": 3,
-        "flow": "Axial",
-        "np": 0.50,
-        "nq": 0.60,
-        "default_diameter_ratio": 0.40,
-        "recommended_for": [
-            "Liquid-Liquid",
-            "Low-viscosity liquids",
-        ],
+        "description": "Axial-flow marine propeller",
+        "flow_type": "Axial",
+        "np": 0.35,
+        "nq": 0.55,
+        "recommended_d_t": (0.30, 0.50),
+        "gas_dispersion": False,
     },
 
     "Anchor": {
-        "description": "Close-clearance low-speed impeller",
-        "blades": 2,
-        "flow": "Tangential",
-        "np": 2.0,
-        "nq": 0.30,
-        "default_diameter_ratio": 0.85,
-        "recommended_for": [
-            "High viscosity",
-            "Laminar mixing",
-            "Heat-transfer service",
-        ],
+        "description": "Close-clearance anchor agitator",
+        "flow_type": "Tangential",
+        "np": 1.50,
+        "nq": 0.20,
+        "recommended_d_t": (0.80, 0.95),
+        "gas_dispersion": False,
     },
 
     "Helical Ribbon": {
         "description": "Close-clearance helical ribbon",
-        "blades": 1,
-        "flow": "Axial/Tangential",
-        "np": 1.0,
-        "nq": 0.25,
-        "default_diameter_ratio": 0.90,
-        "recommended_for": [
-            "High viscosity",
-            "Non-Newtonian systems",
-        ],
+        "flow_type": "Axial / Helical",
+        "np": 2.50,
+        "nq": 0.30,
+        "recommended_d_t": (0.80, 0.95),
+        "gas_dispersion": False,
     },
 
     "RCI": {
-        "description": "Retreating Curve Impeller",
-        "blades": 2,
-        "flow": "Axial/Mixed",
-        "np": None,
-        "nq": None,
-        "default_diameter_ratio": 0.40,
-        "recommended_for": [
-            "High-efficiency mixing",
-        ],
-        "note": (
-            "Use validated manufacturer/literature/test "
-            "Np and Nq data."
-        ),
+        "description": "Radial circulation impeller",
+        "flow_type": "Radial",
+        "np": 4.50,
+        "nq": 0.70,
+        "recommended_d_t": (0.30, 0.60),
+        "gas_dispersion": True,
     },
 }
