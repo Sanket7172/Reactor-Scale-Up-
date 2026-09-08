@@ -1,5 +1,9 @@
-from .reactor_3d import create_reactor_animation
+"""
+Visualization package for Reactor Scale-Up Engineering Studio.
 
-__all__ = [
-    "create_reactor_animation",
-]
+Keep this file intentionally lightweight.
+"""
+
+from .reactor_3d import create_reactor_figure
+
+__all__ = ["create_reactor_figure"]
