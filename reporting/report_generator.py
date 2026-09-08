@@ -2,7 +2,6 @@
 Engineering PDF report generator.
 """
 
-
 from io import BytesIO
 
 from reportlab.lib import colors
@@ -20,22 +19,19 @@ from reportlab.platypus import (
 
 
 def _fmt(value, digits=3):
-
     if value is None:
         return "N/A"
 
     try:
-        return f"{float(value):.{digits}f}"
-    except Exception:
+        return f"{float(value):,.{digits}f}"
+    except (TypeError, ValueError):
         return str(value)
 
 
-def build_pdf(
-    report_data
-):
+def build_pdf(data):
     buffer = BytesIO()
 
-    doc = SimpleDocTemplate(
+    document = SimpleDocTemplate(
         buffer,
         pagesize=A4,
         rightMargin=15 * mm,
@@ -48,39 +44,9 @@ def build_pdf(
 
     title = styles["Title"]
     heading = styles["Heading2"]
-    normal = styles["BodyText"]
+    body = styles["BodyText"]
 
     story = []
-
-    process_type = report_data.get(
-        "process_type",
-        "N/A",
-    )
-
-    geometry = report_data.get(
-        "geometry",
-        {},
-    )
-
-    stages = report_data.get(
-        "stages",
-        [],
-    )
-
-    train = report_data.get(
-        "train",
-        {},
-    )
-
-    checks = report_data.get(
-        "checks",
-        [],
-    )
-
-    recommendations = report_data.get(
-        "recommendations",
-        [],
-    )
 
     story.append(
         Paragraph(
@@ -90,67 +56,98 @@ def build_pdf(
     )
 
     story.append(
-        Spacer(1, 6 * mm)
+        Spacer(1, 8)
     )
 
     story.append(
         Paragraph(
-            f"Process requirement: {process_type}",
-            normal,
+            "Preliminary engineering / scale-up screening report",
+            body,
         )
     )
 
     story.append(
-        Spacer(1, 5 * mm)
+        Spacer(1, 12)
     )
-
-    # --------------------------------------------------------
-    # Geometry
-    # --------------------------------------------------------
 
     story.append(
         Paragraph(
-            "1. Reactor Geometry",
+            "1. Design Basis",
             heading,
         )
     )
 
-    geometry_data = [
+    story.append(
+        Paragraph(
+            f"Process type: {data.get('process_type', 'N/A')}",
+            body,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"Study mode: {data.get('study_mode', 'N/A')}",
+            body,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"Scale-up basis: {data.get('scaleup_basis', 'N/A')}",
+            body,
+        )
+    )
+
+    story.append(
+        Spacer(1, 8)
+    )
+
+    geom = data.get(
+        "geometry",
+        {},
+    )
+
+    story.append(
+        Paragraph(
+            "2. Reactor Geometry",
+            heading,
+        )
+    )
+
+    geometry_table = [
         ["Parameter", "Value"],
-
         [
-            "Tank diameter",
-            f"{_fmt(geometry.get('tank_diameter_m'))} m",
+            "Working Volume",
+            f"{_fmt(geom.get('working_volume_m3'))} m³",
         ],
-
         [
-            "Working volume",
-            f"{_fmt(geometry.get('working_volume_m3'))} m³",
+            "Total Vessel Volume",
+            f"{_fmt(geom.get('total_volume_m3'))} m³",
         ],
-
         [
-            "Total volume",
-            f"{_fmt(geometry.get('total_volume_m3'))} m³",
+            "Tank Diameter",
+            f"{_fmt(geom.get('tank_diameter_m'))} m",
         ],
-
         [
-            "Liquid height",
-            f"{_fmt(geometry.get('liquid_height_m'))} m",
+            "Straight Side",
+            f"{_fmt(geom.get('straight_height_m'))} m",
         ],
-
+        [
+            "Liquid Height",
+            f"{_fmt(geom.get('liquid_height_m'))} m",
+        ],
+        [
+            "Fill",
+            f"{_fmt(geom.get('fill_percent'), 1)} %",
+        ],
         [
             "Baffles",
-            str(
-                geometry.get(
-                    "baffles",
-                    "N/A",
-                )
-            ),
+            str(geom.get("baffles", "N/A")),
         ],
     ]
 
     table = Table(
-        geometry_data,
+        geometry_table,
         colWidths=[
             75 * mm,
             80 * mm,
@@ -192,39 +189,53 @@ def build_pdf(
     story.append(table)
 
     story.append(
-        Spacer(1, 6 * mm)
+        Spacer(1, 12)
     )
-
-    # --------------------------------------------------------
-    # Train
-    # --------------------------------------------------------
 
     story.append(
         Paragraph(
-            "2. Agitator Train",
+            "3. Agitator Train",
             heading,
         )
     )
 
-    train_data = [
+    stages = data.get(
+        "stages",
+        [],
+    )
+
+    stage_table = [
         [
             "Stage",
             "Agitator",
             "D (m)",
             "RPM",
-            "Power (kW)",
-            "Q (m³/h)",
             "Re",
-            "Tip (m/s)",
+            "P (kW)",
+            "Q (m³/h)",
+            "P/V",
+            "Tip",
+            "Njs",
+            "N/Njs",
         ]
     ]
 
     for i, stage in enumerate(
         stages,
-        1,
+        start=1,
     ):
+        njs = stage.get(
+            "njs_rpm",
+            None,
+        )
 
-        train_data.append(
+        ratio = (
+            stage.get("rpm", 0.0) / njs
+            if njs and njs > 0
+            else None
+        )
+
+        stage_table.append(
             [
                 str(i),
                 stage.get(
@@ -242,6 +253,10 @@ def build_pdf(
                     1,
                 ),
                 _fmt(
+                    stage.get("Re"),
+                    0,
+                ),
+                _fmt(
                     stage.get("power_kw"),
                     3,
                 ),
@@ -250,8 +265,10 @@ def build_pdf(
                     2,
                 ),
                 _fmt(
-                    stage.get("Re"),
-                    0,
+                    stage.get(
+                        "power_per_volume_kw_m3"
+                    ),
+                    3,
                 ),
                 _fmt(
                     stage.get(
@@ -259,21 +276,32 @@ def build_pdf(
                     ),
                     2,
                 ),
+                _fmt(
+                    njs,
+                    1,
+                ),
+                _fmt(
+                    ratio,
+                    2,
+                ),
             ]
         )
 
     table = Table(
-        train_data,
+        stage_table,
         repeatRows=1,
         colWidths=[
-            12 * mm,
-            40 * mm,
+            9 * mm,
+            34 * mm,
+            17 * mm,
+            17 * mm,
+            20 * mm,
+            18 * mm,
+            24 * mm,
+            18 * mm,
+            17 * mm,
             18 * mm,
             18 * mm,
-            20 * mm,
-            22 * mm,
-            20 * mm,
-            22 * mm,
         ],
     )
 
@@ -312,75 +340,63 @@ def build_pdf(
     story.append(table)
 
     story.append(
-        Spacer(1, 6 * mm)
+        Spacer(1, 12)
     )
 
-    # --------------------------------------------------------
-    # Overall performance
-    # --------------------------------------------------------
+    train = data.get(
+        "train",
+        {},
+    )
 
     story.append(
         Paragraph(
-            "3. Overall Mixing Performance",
+            "4. Agitation Summary",
             heading,
         )
     )
 
-    performance_data = [
+    summary = [
         [
-            "Parameter",
-            "Value",
-        ],
-
-        [
-            "Total power",
+            "Total Shaft Power",
             f"{_fmt(train.get('total_power_kw'), 3)} kW",
         ],
-
         [
-            "P/V",
-            f"{_fmt(train.get('power_per_volume_W_m3'), 2)} W/m³",
-        ],
-
-        [
-            "Total Q",
+            "Total Pumping",
             f"{_fmt(train.get('total_Q_m3_h'), 2)} m³/h",
         ],
-
+        [
+            "P/V",
+            f"{_fmt(train.get('P_per_V_kW_m3'), 3)} kW/m³",
+        ],
         [
             "Q/V",
-            f"{_fmt(train.get('Q_per_volume_h'), 2)} h⁻¹",
+            f"{_fmt(train.get('Q_per_volume_1_s'), 5)} s⁻¹",
         ],
-
         [
-            "Turnover time",
-            f"{_fmt(train.get('turnover_time_min'), 2)} min",
+            "Turnover Time",
+            f"{_fmt(train.get('turnover_time_min'), 3)} min",
+        ],
+        [
+            "System Njs",
+            f"{_fmt(train.get('system_Njs_rpm'), 1)} RPM",
+        ],
+        [
+            "Average Tip Speed",
+            f"{_fmt(train.get('average_tip_speed_m_s'), 2)} m/s",
         ],
     ]
 
     table = Table(
-        performance_data,
+        summary,
         colWidths=[
-            75 * mm,
             80 * mm,
+            75 * mm,
         ],
     )
 
     table.setStyle(
         TableStyle(
             [
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, 0),
-                    colors.HexColor("#17233c"),
-                ),
-                (
-                    "TEXTCOLOR",
-                    (0, 0),
-                    (-1, 0),
-                    colors.white,
-                ),
                 (
                     "GRID",
                     (0, 0),
@@ -395,49 +411,47 @@ def build_pdf(
     story.append(table)
 
     story.append(
-        PageBreak()
+        Spacer(1, 12)
     )
-
-    # --------------------------------------------------------
-    # Validation
-    # --------------------------------------------------------
 
     story.append(
         Paragraph(
-            "4. Engineering Validation",
+            "5. Engineering Validation",
             heading,
         )
     )
 
-    validation_data = [
+    checks = data.get(
+        "checks",
+        [],
+    )
+
+    validation_table = [
         [
-            "Check",
             "Status",
-            "Comment",
+            "Engineering Check",
         ]
     ]
 
-    for item in checks:
-
-        if len(item) >= 3:
-
-            name, ok, message = item[:3]
-
-            validation_data.append(
-                [
-                    str(name),
-                    "PASS" if ok else "REVIEW",
-                    str(message),
-                ]
-            )
+    for check in checks:
+        validation_table.append(
+            [
+                check.get(
+                    "severity",
+                    "REVIEW",
+                ),
+                check.get(
+                    "message",
+                    "",
+                ),
+            ]
+        )
 
     table = Table(
-        validation_data,
-        repeatRows=1,
+        validation_table,
         colWidths=[
-            55 * mm,
-            20 * mm,
-            80 * mm,
+            30 * mm,
+            125 * mm,
         ],
     )
 
@@ -476,56 +490,47 @@ def build_pdf(
     story.append(table)
 
     story.append(
-        Spacer(1, 6 * mm)
+        Spacer(1, 12)
     )
-
-    # --------------------------------------------------------
-    # Recommendations
-    # --------------------------------------------------------
 
     story.append(
         Paragraph(
-            "5. Engineering Recommendations",
+            "6. Engineering Recommendation",
             heading,
         )
     )
 
-    for item in recommendations:
-
+    for recommendation in data.get(
+        "recommendations",
+        [],
+    ):
         story.append(
             Paragraph(
-                f"• {item}",
-                normal,
+                f"• {recommendation}",
+                body,
             )
         )
 
         story.append(
-            Spacer(1, 2 * mm)
+            Spacer(1, 4)
         )
 
     story.append(
-        Spacer(1, 5 * mm)
+        Spacer(1, 12)
     )
 
     story.append(
         Paragraph(
-            "Calculation Basis & Limitation",
-            heading,
+            "Engineering limitation: This report is a preliminary "
+            "engineering screening document. Np/Nq, Njs, blend time, "
+            "kLa, heat transfer and mechanical design must be validated "
+            "using applicable literature, vendor data, pilot trials, "
+            "plant data and detailed mechanical/process design.",
+            body,
         )
     )
 
-    story.append(
-        Paragraph(
-            "This report is intended for preliminary engineering "
-            "screening and scale-up assessment. Mixing correlations, "
-            "Np/Nq values and Njs estimates must be validated using "
-            "pilot data, vendor data, literature correlations and "
-            "detailed mechanical/process design before final equipment release.",
-            normal,
-        )
-    )
-
-    doc.build(story)
+    document.build(story)
 
     buffer.seek(0)
 
