@@ -1,357 +1,496 @@
 """
-Core reactor mixing calculations.
+Core reactor agitation calculations.
 
-Units:
-- Diameter: m
-- Volume: m3
-- Density: kg/m3
-- Viscosity: Pa.s
-- RPM: rpm
-- Power: W / kW
-- Flow: m3/h
+Internal units:
+    D       = m
+    N       = rev/s
+    rho     = kg/m3
+    mu      = Pa.s
+    power   = W
+    Q       = m3/s
+    V       = m3
 """
 
 import math
 
 
-G = 9.81
+G = 9.80665
+KW_TO_HP = 1.34102209
 
 
-def _safe(value, default=0.0):
+def safe(value, default=0.0):
     try:
         return float(value)
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
-def calculate_agitator(stage):
+def flow_regime(Re):
+    if Re < 10:
+        return "Laminar"
+
+    if Re < 10000:
+        return "Transitional"
+
+    return "Turbulent"
+
+
+def calculate_reynolds(
+    density_kg_m3,
+    rotational_speed_rps,
+    diameter_m,
+    viscosity_pa_s,
+):
+    rho = max(safe(density_kg_m3), 1e-12)
+    N = max(safe(rotational_speed_rps), 0.0)
+    D = max(safe(diameter_m), 1e-12)
+    mu = max(safe(viscosity_pa_s), 1e-12)
+
+    return rho * N * D**2 / mu
+
+
+def calculate_power(
+    Np,
+    density_kg_m3,
+    rotational_speed_rps,
+    diameter_m,
+    number_impellers=1,
+):
+    if Np is None:
+        return None
+
+    rho = max(safe(density_kg_m3), 0.0)
+    N = max(safe(rotational_speed_rps), 0.0)
+    D = max(safe(diameter_m), 0.0)
+    ni = max(int(number_impellers), 1)
+
+    return (
+        float(Np)
+        * rho
+        * N**3
+        * D**5
+        * ni
+    )
+
+
+def calculate_pumping(
+    Nq,
+    rotational_speed_rps,
+    diameter_m,
+    number_impellers=1,
+):
+    if Nq is None:
+        return None
+
+    N = max(safe(rotational_speed_rps), 0.0)
+    D = max(safe(diameter_m), 0.0)
+    ni = max(int(number_impellers), 1)
+
+    return (
+        float(Nq)
+        * N
+        * D**3
+        * ni
+    )
+
+
+def calculate_torque(power_w, rotational_speed_rps):
+    if power_w is None:
+        return None
+
+    if rotational_speed_rps <= 0:
+        return None
+
+    return power_w / (
+        2.0 * math.pi * rotational_speed_rps
+    )
+
+
+def calculate_tip_speed(diameter_m, rotational_speed_rps):
+    return (
+        math.pi
+        * max(safe(diameter_m), 0.0)
+        * max(safe(rotational_speed_rps), 0.0)
+    )
+
+
+def calculate_froude(diameter_m, rotational_speed_rps):
+    return (
+        max(safe(rotational_speed_rps), 0.0) ** 2
+        * max(safe(diameter_m), 0.0)
+        / G
+    )
+
+
+def zwietering_njs(
+    stage,
+    solids_wt_percent,
+    particle_diameter_m,
+    solid_density_kg_m3,
+    liquid_density_kg_m3,
+    S=4.5,
+):
     """
-    Calculate one independent agitator stage.
+    Zwietering-type minimum suspension speed.
+
+    IMPORTANT:
+    This is a screening correlation.
+
+    X is converted from solids wt% to solids/liquid mass ratio:
+        X = wt% / (100 - wt%)
+
+    Returned value:
+        RPM
+
+    The S factor must be appropriate for the impeller/system.
     """
 
-    rho = _safe(
-        stage.get("density_kg_m3"),
-        1000.0,
+    rho_l = max(
+        safe(liquid_density_kg_m3),
+        1e-12,
+    )
+
+    rho_s = max(
+        safe(solid_density_kg_m3),
+        rho_l,
     )
 
     mu = max(
-        _safe(
-            stage.get("viscosity_pa_s"),
-            0.001,
-        ),
+        safe(stage.get("viscosity_pa_s", 0.001)),
+        1e-12,
+    )
+
+    nu = mu / rho_l
+
+    dp = max(
+        safe(particle_diameter_m),
+        1e-9,
+    )
+
+    D = max(
+        safe(stage.get("impeller_diameter_m", 0.1)),
+        1e-9,
+    )
+
+    wt = min(
+        max(safe(solids_wt_percent), 0.0),
+        99.0,
+    )
+
+    if wt <= 0:
+        return None
+
+    X = wt / (100.0 - wt)
+
+    density_ratio = max(
+        (rho_s - rho_l) / rho_l,
+        0.0,
+    )
+
+    if density_ratio <= 0:
+        return None
+
+    njs_rps = (
+        float(S)
+        * nu**0.1
+        * (
+            G
+            * density_ratio
+        )**0.45
+        * X**0.13
+        * dp**0.2
+        * D**-0.85
+    )
+
+    return max(njs_rps * 60.0, 0.0)
+
+
+def calculate_agitator_stage(stage):
+    density = max(
+        safe(stage.get("density_kg_m3", 1000.0)),
+        1e-12,
+    )
+
+    viscosity = max(
+        safe(stage.get("viscosity_pa_s", 0.001)),
+        1e-12,
+    )
+
+    D = max(
+        safe(stage.get("impeller_diameter_m", 0.1)),
         1e-9,
     )
 
     rpm = max(
-        _safe(stage.get("rpm"), 0.0),
+        safe(stage.get("rpm", 0.0)),
         0.0,
-    )
-
-    D = max(
-        _safe(
-            stage.get("impeller_diameter_m"),
-            0.1,
-        ),
-        0.001,
-    )
-
-    n_imp = max(
-        int(
-            stage.get(
-                "number_impellers",
-                1,
-            )
-        ),
-        1,
     )
 
     N = rpm / 60.0
 
-    Re = (
-        rho
-        * N
-        * D**2
-        / mu
+    n_imp = max(
+        int(stage.get("number_impellers", 1)),
+        1,
     )
 
-    Fr = (
-        N**2
-        * D
-        / G
+    tank_D = max(
+        safe(stage.get("tank_diameter_m", 1.0)),
+        1e-9,
     )
 
-    tip_speed = (
-        math.pi
-        * D
-        * N
+    liquid_height = max(
+        safe(stage.get("liquid_height_m", 0.0)),
+        0.0,
+    )
+
+    working_volume = max(
+        safe(stage.get("working_volume_m3", 0.0)),
+        1e-12,
     )
 
     Np = stage.get("Np")
-
     Nq = stage.get("Nq")
 
-    power_w = None
-    power_kw = None
+    Re = calculate_reynolds(
+        density,
+        N,
+        D,
+        viscosity,
+    )
 
-    if Np is not None:
+    power_w = calculate_power(
+        Np,
+        density,
+        N,
+        D,
+        n_imp,
+    )
 
-        power_w = (
-            float(Np)
-            * rho
-            * N**3
-            * D**5
-            * n_imp
-        )
+    q_m3_s = calculate_pumping(
+        Nq,
+        N,
+        D,
+        n_imp,
+    )
 
-        power_kw = power_w / 1000.0
+    power_kw = (
+        power_w / 1000.0
+        if power_w is not None
+        else None
+    )
 
-    Q_m3_h = None
+    power_hp = (
+        power_w / 745.699872
+        if power_w is not None
+        else None
+    )
 
-    if Nq is not None:
+    q_m3_h = (
+        q_m3_s * 3600.0
+        if q_m3_s is not None
+        else None
+    )
 
-        Q_m3_s = (
-            float(Nq)
-            * N
-            * D**3
-            * n_imp
-        )
+    pv_kw_m3 = (
+        power_kw / working_volume
+        if power_kw is not None
+        else None
+    )
 
-        Q_m3_h = (
-            Q_m3_s
-            * 3600.0
-        )
+    qv_s_inv = (
+        q_m3_s / working_volume
+        if q_m3_s is not None
+        else None
+    )
 
-    torque = None
+    turnover_min = (
+        1.0 / qv_s_inv / 60.0
+        if qv_s_inv and qv_s_inv > 0
+        else None
+    )
 
-    if power_w is not None and N > 0:
+    torque = calculate_torque(
+        power_w,
+        N,
+    )
 
-        torque = (
-            power_w
-            / (
-                2.0
-                * math.pi
-                * N
-            )
-        )
+    tip_speed = calculate_tip_speed(
+        D,
+        N,
+    )
 
-    D_T = (
-        D
-        / max(
-            _safe(
-                stage.get("tank_diameter_m"),
-                D,
-            ),
-            1e-9,
-        )
+    Fr = calculate_froude(
+        D,
+        N,
+    )
+
+    D_T = D / tank_D
+
+    C = safe(
+        stage.get("clearance_m", 0.0)
+    )
+
+    C_T = C / tank_D
+
+    H_T = (
+        liquid_height / tank_D
+        if tank_D > 0
+        else None
     )
 
     return {
         **stage,
 
-        "N_s_inv": N,
+        "rpm": rpm,
+        "N_rps": N,
 
         "Re": Re,
         "reynolds_number": Re,
+        "mixing_regime": flow_regime(Re),
 
         "Fr": Fr,
         "froude_number": Fr,
+
+        "D_T": D_T,
+        "H_T": H_T,
+        "clearance_T": C_T,
 
         "tip_speed_m_s": tip_speed,
         "tip_speed": tip_speed,
 
         "power_w": power_w,
         "power_kw": power_kw,
+        "power_hp": power_hp,
+        "power_per_volume_kw_m3": pv_kw_m3,
+        "power_volume": pv_kw_m3,
+        "power_per_volume": pv_kw_m3,
+
+        "Q_m3_s": q_m3_s,
+        "Q_m3_h": q_m3_h,
+        "pumping_m3_h": q_m3_h,
+
+        "Q_per_volume_s_inv": qv_s_inv,
+        "Q_per_volume_1_s": qv_s_inv,
+
+        "turnover_time_min": turnover_min,
 
         "torque_Nm": torque,
         "torque_nm": torque,
 
-        "Q_m3_h": Q_m3_h,
-        "pumping_m3_h": Q_m3_h,
-
-        "D_T": D_T,
-
-        "mixing_regime": (
-            "Laminar"
-            if Re < 10
-            else
-            "Transitional"
-            if Re < 10000
-            else
-            "Turbulent"
+        "njs_rpm": stage.get("njs_rpm"),
+        "Njs_RPM": stage.get("njs_rpm"),
+        "Njs_s_inv": (
+            stage.get("njs_rpm", 0.0) / 60.0
+            if stage.get("njs_rpm")
+            else None
         ),
     }
 
 
-def calculate_train(
-    stages,
-    working_volume,
-):
-    """
-    Calculate all independent agitator stages.
-    """
-
+def calculate_train(stages, working_volume_m3):
     results = []
 
     for stage in stages:
-
-        result = calculate_agitator(
-            stage
+        results.append(
+            calculate_agitator_stage(stage)
         )
 
-        results.append(result)
+    total_power_kw = sum(
+        x["power_kw"] or 0.0
+        for x in results
+    )
 
-    total_power_w = sum(
-        (
-            x["power_w"]
+    total_power_w = total_power_kw * 1000.0
+
+    total_q_m3_h = sum(
+        x["Q_m3_h"] or 0.0
+        for x in results
+    )
+
+    total_q_m3_s = total_q_m3_h / 3600.0
+
+    V = max(
+        safe(working_volume_m3),
+        1e-12,
+    )
+
+    pv_kw_m3 = total_power_kw / V
+
+    pv_w_m3 = total_power_w / V
+
+    qv_s_inv = total_q_m3_s / V
+
+    qv_h_inv = total_q_m3_h / V
+
+    turnover_min = (
+        1.0 / qv_s_inv / 60.0
+        if qv_s_inv > 0
+        else None
+    )
+
+    total_torque = sum(
+        x["torque_Nm"] or 0.0
+        for x in results
+    )
+
+    njs_values = [
+        x["njs_rpm"]
+        for x in results
+        if x.get("njs_rpm") is not None
+    ]
+
+    system_njs = (
+        max(njs_values)
+        if njs_values
+        else None
+    )
+
+    average_tip_speed = (
+        sum(
+            x["tip_speed_m_s"]
             for x in results
-            if x["power_w"] is not None
         )
+        / len(results)
+        if results
+        else None
     )
 
-    total_Q_m3_h = sum(
-        (
-            x["Q_m3_h"]
-            for x in results
-            if x["Q_m3_h"] is not None
-        )
+    max_re = (
+        max(x["Re"] for x in results)
+        if results
+        else None
     )
 
-    volume = max(
-        float(working_volume),
-        1e-9,
-    )
-
-    power_per_volume = (
-        total_power_w
-        / volume
-    )
-
-    Q_per_volume_h = (
-        total_Q_m3_h
-        / volume
-    )
-
-    # Convert Q/V from h^-1 to s^-1.
-    Q_per_volume_s = (
-        Q_per_volume_h
-        / 3600.0
-    )
-
-    turnover_time_min = None
-
-    if total_Q_m3_h > 0:
-
-        turnover_time_min = (
-            volume
-            / total_Q_m3_h
-            * 60.0
-        )
-
-    train = {
+    return results, {
         "total_power_w": total_power_w,
-
-        "total_power_kw":
-            total_power_w / 1000.0,
-
-        "power_per_volume_W_m3":
-            power_per_volume,
-
-        "total_Q_m3_h":
-            total_Q_m3_h,
-
-        "Q_per_volume_h":
-            Q_per_volume_h,
-
-        "Q_per_volume_1_s":
-            Q_per_volume_s,
-
-        "turnover_time_min":
-            turnover_time_min,
-
-        "number_of_stages":
-            len(results),
-    }
-
-    return results, train
-
-
-def zwietering_njs(
-    result,
-    solids_wt_percent,
-    particle_diameter_m,
-    solid_density,
-    liquid_density,
-    S=5.0,
-):
-    """
-    Screening Njs estimate.
-
-    This is NOT a universal correlation.
-
-    The result should be treated as an engineering
-    screening estimate and validated against actual
-    suspension data.
-
-    Returns:
-        Njs in s^-1
-    """
-
-    D = max(
-        float(
-            result.get(
-                "impeller_diameter_m",
-                0.1,
-            )
+        "total_power_kw": total_power_kw,
+        "total_power_hp": (
+            total_power_w / 745.699872
         ),
-        1e-6,
-    )
 
-    S = max(
-        float(S),
-        0.01,
-    )
+        "total_Q_m3_s": total_q_m3_s,
+        "total_Q_m3_h": total_q_m3_h,
 
-    dp = max(
-        float(particle_diameter_m),
-        1e-7,
-    )
+        "power_per_volume_W_m3": pv_w_m3,
+        "P_per_V_kW_m3": pv_kw_m3,
 
-    rho_s = max(
-        float(solid_density),
-        1.0,
-    )
+        "Q_per_volume_1_s": qv_s_inv,
+        "Q_per_volume_1_h": qv_h_inv,
 
-    rho_l = max(
-        float(liquid_density),
-        1.0,
-    )
+        "turnover_time_min": turnover_min,
 
-    X = max(
-        float(solids_wt_percent) / 100.0,
-        0.0,
-    )
+        "total_torque_Nm": total_torque,
 
-    delta_rho_ratio = max(
-        (rho_s - rho_l) / rho_l,
-        0.0,
-    )
+        "system_Njs_rpm": system_njs,
+        "system_Njs_s_inv": (
+            system_njs / 60.0
+            if system_njs
+            else None
+        ),
 
-    # Screening form.
-    Njs = (
-        S
-        * (
-            G
-            * dp
-            * delta_rho_ratio
-        ) ** 0.45
-        / D**0.85
-        * (1.0 + 2.0 * X)
-    )
-
-    return max(
-        Njs,
-        0.0,
-    )
+        "average_tip_speed_m_s": average_tip_speed,
+        "maximum_reynolds": max_re,
+    }
 
 
 def calculate_reactor(
@@ -367,87 +506,37 @@ def calculate_reactor(
     agitator,
     impeller_clearance_m=None,
 ):
-    """
-    Backward-compatible single-stage calculation.
-    """
+    from libraries.agitator_geometry import AGITATORS
 
-    Np = None
-    Nq = None
+    spec = AGITATORS.get(
+        agitator,
+        {},
+    )
 
-    flow_map = {
-        "Rushton Turbine": (5.0, 0.75),
-        "Pitched Blade Turbine": (1.5, 0.75),
-        "Hydrofoil": (0.35, 0.70),
-        "Marine Propeller": (0.50, 0.60),
-        "Anchor": (2.0, 0.30),
-        "Helical Ribbon": (1.0, 0.25),
-        "RCI": (None, None),
+    stage = {
+        "agitator": agitator,
+        "Np": spec.get("Np"),
+        "Nq": spec.get("Nq"),
+        "impeller_diameter_m": impeller_diameter_m,
+        "rpm": rpm,
+        "number_impellers": number_impellers,
+        "density_kg_m3": density_kg_m3,
+        "viscosity_pa_s": viscosity_pa_s,
+        "tank_diameter_m": tank_diameter_m,
+        "liquid_height_m": liquid_height_m,
+        "working_volume_m3": volume_m3,
+        "clearance_m": (
+            impeller_clearance_m
+            if impeller_clearance_m is not None
+            else 0.0
+        ),
     }
 
-    if agitator in flow_map:
-
-        Np, Nq = flow_map[agitator]
-
-    result = calculate_agitator(
-        {
-            "agitator": agitator,
-            "Np": Np,
-            "Nq": Nq,
-            "impeller_diameter_m":
-                impeller_diameter_m,
-            "rpm": rpm,
-            "number_impellers":
-                number_impellers,
-            "elevation_m":
-                0.5 * liquid_height_m,
-            "clearance_m":
-                impeller_clearance_m,
-            "density_kg_m3":
-                density_kg_m3,
-            "viscosity_pa_s":
-                viscosity_pa_s,
-            "tank_diameter_m":
-                tank_diameter_m,
-        }
-    )
-
-    result["H_T"] = (
-        liquid_height_m
-        / tank_diameter_m
-        if tank_diameter_m > 0
-        else 0.0
-    )
-
-    result["clearance_T"] = (
-        impeller_clearance_m
-        / tank_diameter_m
-        if impeller_clearance_m is not None
-        and tank_diameter_m > 0
-        else None
-    )
-
-    result["surface_tension_n_m"] = (
-        surface_tension_n_m
-    )
+    result = calculate_agitator_stage(stage)
 
     result["volume_m3"] = volume_m3
-
-    result["power_volume"] = (
-        result["power_w"] / volume_m3
-        if result["power_w"] is not None
-        and volume_m3 > 0
-        else None
-    )
-
-    result["power_per_volume"] = (
-        result["power_volume"]
-    )
-
-    result["qv_1_h"] = (
-        result["Q_m3_h"] / volume_m3
-        if result["Q_m3_h"] is not None
-        and volume_m3 > 0
-        else None
+    result["surface_tension_n_m"] = (
+        surface_tension_n_m
     )
 
     return result
