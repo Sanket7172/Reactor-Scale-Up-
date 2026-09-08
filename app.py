@@ -1,8 +1,11 @@
+```python
 import math
-import uuid
-
 import pandas as pd
 import streamlit as st
+
+# =========================================================
+# APPLICATION MODULES
+# =========================================================
 
 from calculations.engine import (
     calculate_train,
@@ -38,9 +41,9 @@ from reporting.report_generator import (
 )
 
 
-# ============================================================
+# =========================================================
 # PAGE CONFIGURATION
-# ============================================================
+# =========================================================
 
 st.set_page_config(
     page_title="Reactor Scale-Up Engineering Studio",
@@ -50,284 +53,208 @@ st.set_page_config(
 )
 
 
-# ============================================================
+# =========================================================
 # GLOBAL CSS
-# ============================================================
+# =========================================================
 
 st.markdown(
     """
     <style>
 
-    /* =====================================================
-       GLOBAL
-       ===================================================== */
+    /* -----------------------------
+       APPLICATION BACKGROUND
+    ----------------------------- */
 
     .stApp {
-        background: #f5f7fa;
+        background-color: #f5f7fa;
     }
 
     .block-container {
-        max-width: 1650px;
+        max-width: 1550px;
         padding-top: 1.2rem;
         padding-bottom: 3rem;
     }
 
-
-    /* =====================================================
+    /* -----------------------------
        SIDEBAR
-       ===================================================== */
+    ----------------------------- */
 
     [data-testid="stSidebar"] {
-        background: #111827;
+        background-color: #111827;
     }
 
     [data-testid="stSidebar"] * {
-        color: #e5e7eb;
+        color: #f3f4f6;
     }
 
-
-    /* =====================================================
+    /* -----------------------------
        MAIN HEADER
-       ===================================================== */
+    ----------------------------- */
 
     .app-header {
         background: linear-gradient(
             135deg,
             #0f172a 0%,
-            #1e3a5f 55%,
-            #315b7d 100%
+            #1e3a5f 100%
         );
 
         padding: 28px 32px;
-        border-radius: 18px;
-
-        color: white;
-
+        border-radius: 16px;
         margin-bottom: 22px;
 
         box-shadow:
-            0 8px 24px rgba(15, 23, 42, 0.14);
+            0 6px 18px rgba(15, 23, 42, 0.12);
     }
 
     .app-header-title {
+        color: white;
         font-size: 31px;
-        font-weight: 800;
-        margin: 0;
-        letter-spacing: -0.4px;
+        font-weight: 750;
+        line-height: 1.2;
+        margin-bottom: 8px;
     }
 
     .app-header-subtitle {
-        margin-top: 7px;
-        font-size: 14px;
         color: #dbe7f5;
-        line-height: 1.5;
+        font-size: 14px;
+        line-height: 1.6;
     }
 
-
-    /* =====================================================
-       SECTION HEADER
-       ===================================================== */
+    /* -----------------------------
+       SECTION HEADERS
+    ----------------------------- */
 
     .section-header {
-        font-size: 21px;
-        font-weight: 800;
+        font-size: 22px;
+        font-weight: 700;
         color: #172033;
-
         margin-top: 18px;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
 
     .subsection-header {
-        font-size: 16px;
-        font-weight: 750;
-        color: #243247;
-
+        font-size: 17px;
+        font-weight: 700;
+        color: #24344d;
         margin-top: 12px;
         margin-bottom: 8px;
     }
 
-
-    /* =====================================================
+    /* -----------------------------
        CONFIGURATION CARD
-       ===================================================== */
+    ----------------------------- */
 
     .config-card {
         background: white;
-
-        border: 1px solid #dce3ec;
-        border-radius: 15px;
-
-        padding: 18px 20px;
-
-        margin-bottom: 20px;
-
-        box-shadow:
-            0 3px 12px rgba(15, 23, 42, 0.045);
-    }
-
-
-    /* =====================================================
-       METRIC CARDS
-       ===================================================== */
-
-    .metric-card {
-        background: white;
-
         border: 1px solid #dce3ec;
         border-radius: 14px;
-
-        padding: 15px 17px;
-
-        min-height: 102px;
+        padding: 18px 20px;
+        margin-bottom: 18px;
 
         box-shadow:
-            0 3px 10px rgba(15, 23, 42, 0.04);
+            0 2px 8px rgba(15, 23, 42, 0.04);
     }
 
-    .metric-label {
-        font-size: 11px;
+    /* -----------------------------
+       KPI CARDS
+    ----------------------------- */
+
+    .kpi-card {
+        background: white;
+        border: 1px solid #dce3ec;
+        border-radius: 12px;
+        padding: 15px 16px;
+        min-height: 98px;
+
+        box-shadow:
+            0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+
+    .kpi-label {
         color: #64748b;
-
-        font-weight: 700;
-
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
+        font-size: 12px;
+        font-weight: 650;
     }
 
-    .metric-value {
-        font-size: 23px;
-
+    .kpi-value {
         color: #172033;
-
-        font-weight: 800;
-
-        margin-top: 6px;
+        font-size: 23px;
+        font-weight: 750;
+        margin-top: 5px;
     }
 
-    .metric-unit {
-        font-size: 11px;
+    .kpi-unit {
         color: #64748b;
-
+        font-size: 11px;
         margin-top: 2px;
     }
 
-
-    /* =====================================================
-       ENGINEERING INFO
-       ===================================================== */
-
-    .engineering-note {
-        background: #fff8e7;
-
-        border: 1px solid #f1dfac;
-        border-left: 4px solid #d49b21;
-
-        border-radius: 10px;
-
-        padding: 12px 15px;
-
-        color: #604d17;
-
-        font-size: 13px;
-
-        line-height: 1.55;
-    }
-
-    .info-note {
-        background: #eff6ff;
-
-        border: 1px solid #cfe1f7;
-        border-left: 4px solid #3b82f6;
-
-        border-radius: 10px;
-
-        padding: 12px 15px;
-
-        color: #24466e;
-
-        font-size: 13px;
-
-        line-height: 1.55;
-    }
-
-
-    /* =====================================================
+    /* -----------------------------
        AGITATOR CARD
-       ===================================================== */
+    ----------------------------- */
 
     .agitator-card {
-        background: #ffffff;
-
-        border: 1px solid #d9e1eb;
-
-        border-radius: 14px;
-
-        padding: 13px 15px;
-
-        margin-bottom: 8px;
+        background: white;
+        border: 1px solid #d7dee8;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
 
         box-shadow:
-            0 2px 8px rgba(15, 23, 42, 0.035);
+            0 2px 7px rgba(15, 23, 42, 0.035);
     }
 
-    .agitator-stage-title {
+    .agitator-title {
         font-size: 16px;
-        font-weight: 800;
+        font-weight: 700;
         color: #1e293b;
     }
 
-    .agitator-stage-subtitle {
-        font-size: 12px;
+    .agitator-description {
         color: #64748b;
-        margin-top: 2px;
+        font-size: 12px;
     }
 
+    /* -----------------------------
+       ENGINEERING NOTE
+    ----------------------------- */
 
-    /* =====================================================
+    .engineering-note {
+        background: #fff8e7;
+        border: 1px solid #ead9a5;
+        border-radius: 10px;
+        padding: 13px 16px;
+        color: #624d16;
+        font-size: 13px;
+        line-height: 1.55;
+    }
+
+    /* -----------------------------
        STATUS
-       ===================================================== */
+    ----------------------------- */
 
     .status-pass {
-        background: #ecfdf5;
-        border: 1px solid #a7f3d0;
-        color: #047857;
-
-        border-radius: 10px;
-        padding: 10px 14px;
-
-        font-weight: 750;
+        color: #166534;
+        font-weight: 700;
     }
 
     .status-review {
-        background: #fffbeb;
-        border: 1px solid #fde68a;
-        color: #a16207;
-
-        border-radius: 10px;
-        padding: 10px 14px;
-
-        font-weight: 750;
+        color: #92400e;
+        font-weight: 700;
     }
 
     .status-fail {
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        color: #b91c1c;
-
-        border-radius: 10px;
-        padding: 10px 14px;
-
-        font-weight: 750;
+        color: #991b1b;
+        font-weight: 700;
     }
 
+    /* -----------------------------
+       BUTTONS
+    ----------------------------- */
 
-    /* =====================================================
-       SMALL TEXT
-       ===================================================== */
-
-    .small-muted {
-        font-size: 12px;
-        color: #64748b;
+    div.stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
     }
 
     </style>
@@ -336,9 +263,9 @@ st.markdown(
 )
 
 
-# ============================================================
+# =========================================================
 # APPLICATION HEADER
-# ============================================================
+# =========================================================
 
 st.markdown(
     """
@@ -360,82 +287,82 @@ st.markdown(
 )
 
 
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
+# =========================================================
+# SIDEBAR
+# =========================================================
 
-def safe_float(value, default=0.0):
-    """Safely convert a value to float."""
-    try:
-        if value is None:
-            return default
-        return float(value)
-    except Exception:
-        return default
+with st.sidebar:
+
+    st.markdown("## ⚗️ Engineering Studio")
+
+    st.markdown("---")
+
+    st.markdown("### Application Modules")
+
+    st.markdown(
+        """
+        **Study Configuration**
+
+        Define process and scale-up basis.
+
+        **Reactor Design**
+
+        Define vessel geometry and internals.
+
+        **Agitator Train**
+
+        Configure independent impellers.
+
+        **Performance**
+
+        Review P/V, Q/V, Re, torque and power.
+
+        **Scale-Up**
+
+        Compare laboratory, pilot and commercial systems.
+
+        **Validation**
+
+        Review engineering checks.
+
+        **3D Mixing**
+
+        Visualize reactor and agitator arrangement.
+
+        **Engineering Report**
+
+        Generate the preliminary engineering report.
+        """
+    )
+
+    st.markdown("---")
+
+    st.caption(
+        "Preliminary engineering screening tool. "
+        "Final equipment selection requires validated "
+        "process, vendor and mechanical design data."
+    )
 
 
-def safe_ratio(numerator, denominator):
-    """Safe division."""
-    try:
-        if denominator is None or abs(float(denominator)) < 1e-12:
-            return None
-        return float(numerator) / float(denominator)
-    except Exception:
-        return None
-
-
-def fmt(value, decimals=2):
-    """Engineering-friendly formatting."""
-    if value is None:
-        return "N/A"
-
-    try:
-        if isinstance(value, float) and math.isnan(value):
-            return "N/A"
-
-        return f"{float(value):,.{decimals}f}"
-
-    except Exception:
-        return str(value)
-
-
-def create_stage_id():
-    """Create persistent unique ID for an agitator stage."""
-    return uuid.uuid4().hex[:8]
-
-
-# ============================================================
+# =========================================================
 # STUDY CONFIGURATION
-# ============================================================
-
-if "project_name" not in st.session_state:
-    st.session_state.project_name = "Reactor Scale-Up Study"
-
-if "study_mode" not in st.session_state:
-    st.session_state.study_mode = "Single Reactor"
-
-if "process_type" not in st.session_state:
-    st.session_state.process_type = "General Mixing"
-
-if "scaleup_basis" not in st.session_state:
-    st.session_state.scaleup_basis = "Constant P/V"
-
+# =========================================================
 
 st.markdown(
-    '<div class="section-header">01 · Study Configuration</div>',
+    '<div class="section-header">Study Configuration</div>',
     unsafe_allow_html=True,
 )
 
 with st.container(border=True):
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
 
     with c1:
 
         project_name = st.text_input(
             "Project / Study Name",
+            value="Reactor Scale-Up Study",
             key="project_name",
-            help="Engineering study or project identification.",
         )
 
     with c2:
@@ -469,7 +396,9 @@ with st.container(border=True):
             key="process_type",
         )
 
-    with c4:
+    c1, c2 = st.columns(2)
+
+    with c1:
 
         scaleup_basis = st.selectbox(
             "Primary Scale-Up Basis",
@@ -484,115 +413,54 @@ with st.container(border=True):
             key="scaleup_basis",
         )
 
+    with c2:
 
-# ============================================================
-# ENGINEERING FOCUS
-# ============================================================
+        st.markdown("**Engineering Focus**")
 
-focus_parameters = [
-    "P/V",
-    "Q/V",
-    "Tip Speed",
-    "Reynolds Number",
-    "Power",
-    "Torque",
-]
+        focus_items = [
+            "P/V",
+            "Q/V",
+            "Tip Speed",
+            "Reynolds Number",
+            "Power",
+            "Torque",
+        ]
 
-if process_type in [
-    "Solid-Liquid",
-    "Gas-Liquid-Solid",
-    "Crystallization",
-]:
-    focus_parameters.append("N/Njs")
+        if process_type in [
+            "Solid-Liquid",
+            "Gas-Liquid-Solid",
+            "Crystallization",
+        ]:
+            focus_items.append("N/Njs")
 
-if process_type in [
-    "Gas-Liquid",
-    "Gas-Liquid-Solid",
-]:
-    focus_parameters.append("kLa")
+        if process_type in [
+            "Gas-Liquid",
+            "Gas-Liquid-Solid",
+        ]:
+            focus_items.append("kLa")
 
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.markdown("## ⚗️ Engineering Studio")
-
-    st.caption(
-        "Reactor mixing and scale-up screening"
-    )
-
-    st.divider()
-
-    st.markdown("### Current Study")
-
-    st.write(
-        f"**Project:** {project_name}"
-    )
-
-    st.write(
-        f"**Mode:** {study_mode}"
-    )
-
-    st.write(
-        f"**Process:** {process_type}"
-    )
-
-    st.write(
-        f"**Scale-Up:** {scaleup_basis}"
-    )
-
-    st.divider()
-
-    st.markdown("### Engineering Focus")
-
-    for item in focus_parameters:
-
-        st.markdown(
-            f"✓ {item}"
-        )
-
-    st.divider()
-
-    st.caption(
-        "Preliminary engineering screening tool. "
-        "Final equipment selection requires validated "
-        "process, mechanical and vendor data."
-    )
+        st.write(" • ".join(focus_items))
 
 
-# ============================================================
+# =========================================================
 # REACTOR NAMES
-# ============================================================
+# =========================================================
 
 if study_mode == "Single Reactor":
 
-    reactor_names = [
-        "Reactor"
-    ]
+    reactor_names = ["Reactor"]
 
 elif study_mode == "Lab vs Pilot":
 
-    reactor_names = [
-        "Lab",
-        "Pilot",
-    ]
+    reactor_names = ["Lab", "Pilot"]
 
 elif study_mode == "Pilot vs Commercial":
 
-    reactor_names = [
-        "Pilot",
-        "Commercial",
-    ]
+    reactor_names = ["Pilot", "Commercial"]
 
 elif study_mode == "Lab vs Commercial":
 
-    reactor_names = [
-        "Lab",
-        "Commercial",
-    ]
+    reactor_names = ["Lab", "Commercial"]
 
 else:
 
@@ -603,96 +471,119 @@ else:
     ]
 
 
-# ============================================================
-# SESSION STATE — AGITATOR STAGE MANAGEMENT
-# ============================================================
+# =========================================================
+# AGITATOR STATE MANAGEMENT
+# =========================================================
 
-for reactor_name in reactor_names:
+def initialize_agitators(reactor_name):
 
-    state_key = (
-        f"stage_ids_{reactor_name}"
-    )
+    state_key = f"{reactor_name}_agitator_ids"
 
     if state_key not in st.session_state:
 
         st.session_state[state_key] = [
-            create_stage_id(),
-            create_stage_id(),
+            1,
+            2,
         ]
 
 
-# Remove session state for reactors no longer active
+def add_agitator(reactor_name):
 
-for key in list(st.session_state.keys()):
+    state_key = f"{reactor_name}_agitator_ids"
 
-    if key.startswith("stage_ids_"):
+    initialize_agitators(reactor_name)
 
-        reactor_name = key.replace(
-            "stage_ids_",
-            "",
-        )
+    current_ids = st.session_state[state_key]
 
-        if reactor_name not in reactor_names:
+    new_id = (
+        max(current_ids) + 1
+        if current_ids
+        else 1
+    )
 
-            del st.session_state[key]
-
-
-# ============================================================
-# DEFAULT AGITATOR HELPERS
-# ============================================================
-
-agitator_names = list(
-    AGITATORS.keys()
-)
-
-
-def get_agitator_default(index):
-
-    if not agitator_names:
-        return None
-
-    return agitator_names[
-        min(
-            index,
-            len(agitator_names) - 1,
-        )
-    ]
-
-
-def get_stage_key(
-    reactor_name,
-    stage_id,
-    parameter,
-):
-
-    return (
-        f"{reactor_name}_"
-        f"stage_{stage_id}_"
-        f"{parameter}"
+    st.session_state[state_key].append(
+        new_id
     )
 
 
-# ============================================================
+def remove_agitator(
+    reactor_name,
+    agitator_id,
+):
+
+    state_key = f"{reactor_name}_agitator_ids"
+
+    initialize_agitators(reactor_name)
+
+    current_ids = st.session_state[state_key]
+
+    if len(current_ids) <= 1:
+        return
+
+    st.session_state[state_key] = [
+        x
+        for x in current_ids
+        if x != agitator_id
+    ]
+
+
+# =========================================================
+# SAFE AGITATOR VALUE HELPERS
+# =========================================================
+
+def safe_float(
+    value,
+    default=0.0,
+):
+
+    try:
+
+        if value is None:
+            return default
+
+        return float(value)
+
+    except Exception:
+
+        return default
+
+
+def safe_int(
+    value,
+    default=1,
+):
+
+    try:
+
+        if value is None:
+            return default
+
+        return int(value)
+
+    except Exception:
+
+        return default
+
+
+# =========================================================
 # REACTOR INPUT PANEL
-# ============================================================
+# =========================================================
 
 def reactor_input_panel(name):
 
     st.markdown(
-        f'<div class="section-header">02 · {name} Reactor Definition</div>',
+        f'<div class="section-header">⚗️ {name} Reactor</div>',
         unsafe_allow_html=True,
     )
 
+    # -----------------------------------------------------
+    # PROCESS CONDITIONS
+    # -----------------------------------------------------
+
     with st.container(border=True):
 
-        # ====================================================
-        # PROCESS CONDITIONS
-        # ====================================================
-
         st.markdown(
-            '<div class="subsection-header">'
-            'Process Conditions'
-            '</div>',
+            '<div class="subsection-header">1. Process Conditions</div>',
             unsafe_allow_html=True,
         )
 
@@ -748,15 +639,14 @@ def reactor_input_panel(name):
                 key=f"{name}_surface_tension",
             )
 
+    # -----------------------------------------------------
+    # REACTOR GEOMETRY
+    # -----------------------------------------------------
 
-        # ====================================================
-        # REACTOR GEOMETRY
-        # ====================================================
+    with st.container(border=True):
 
         st.markdown(
-            '<div class="subsection-header">'
-            'Vessel Geometry'
-            '</div>',
+            '<div class="subsection-header">2. Reactor Geometry</div>',
             unsafe_allow_html=True,
         )
 
@@ -792,7 +682,7 @@ def reactor_input_panel(name):
                 key=f"{name}_straight_H",
             )
 
-        head_options = [
+        head_types = [
             "Flat Bottom",
             "2:1 Ellipsoidal",
             "10% Torispherical",
@@ -805,7 +695,7 @@ def reactor_input_panel(name):
 
             bottom_type = st.selectbox(
                 "Bottom Head",
-                head_options,
+                head_types,
                 index=1,
                 key=f"{name}_bottom",
             )
@@ -814,22 +704,23 @@ def reactor_input_panel(name):
 
             top_type = st.selectbox(
                 "Top Head",
-                head_options,
+                head_types,
                 index=1,
                 key=f"{name}_top",
             )
 
+        try:
 
-        # ====================================================
-        # GEOMETRY CALCULATIONS
-        # ====================================================
+            total_volume = calculate_total_volume(
+                tank_D,
+                straight_H,
+                bottom_type,
+                top_type,
+            )
 
-        total_volume = calculate_total_volume(
-            tank_D,
-            straight_H,
-            bottom_type,
-            top_type,
-        )
+        except Exception:
+
+            total_volume = 0.0
 
         try:
 
@@ -845,71 +736,62 @@ def reactor_input_panel(name):
 
             liquid_height = 0.0
 
-        fill = calculate_fill_percent(
-            working_volume,
-            total_volume,
+        try:
+
+            fill = calculate_fill_percent(
+                working_volume,
+                total_volume,
+            )
+
+        except Exception:
+
+            fill = 0.0
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Calculated Vessel Volume",
+            f"{total_volume:.2f} m³",
         )
 
-        ht_ratio = safe_ratio(
-            liquid_height,
-            tank_D,
+        c2.metric(
+            "Liquid Height",
+            f"{liquid_height:.2f} m",
         )
 
+        c3.metric(
+            "Operating Fill",
+            f"{fill:.1f} %",
+        )
 
-        # ====================================================
-        # GEOMETRY KPI
-        # ====================================================
+        H_T = (
+            liquid_height / tank_D
+            if tank_D > 0
+            else 0.0
+        )
 
-        k1, k2, k3, k4 = st.columns(4)
+        c4.metric(
+            "H/T",
+            f"{H_T:.2f}",
+        )
 
-        with k1:
-
-            st.metric(
-                "Calculated Vessel Volume",
-                f"{total_volume:.2f} m³",
-            )
-
-        with k2:
-
-            st.metric(
-                "Liquid Height",
-                f"{liquid_height:.2f} m",
-            )
-
-        with k3:
-
-            st.metric(
-                "Operating Fill",
-                f"{fill:.1f} %",
-            )
-
-        with k4:
-
-            st.metric(
-                "H/T",
-                (
-                    f"{ht_ratio:.2f}"
-                    if ht_ratio is not None
-                    else "N/A"
-                ),
-            )
-
-        if working_volume > total_volume:
+        if (
+            total_volume > 0
+            and working_volume > total_volume
+        ):
 
             st.error(
-                "Working volume exceeds calculated vessel capacity. "
-                "Please review reactor geometry."
+                "Working volume exceeds calculated vessel capacity."
             )
 
+    # -----------------------------------------------------
+    # VESSEL INTERNALS
+    # -----------------------------------------------------
 
-        # ====================================================
-        # VESSEL INTERNALS
-        # ====================================================
+    with st.container(border=True):
 
         st.markdown(
-            '<div class="subsection-header">'
-            'Vessel Internals'
-            '</div>',
+            '<div class="subsection-header">3. Vessel Internals</div>',
             unsafe_allow_html=True,
         )
 
@@ -937,306 +819,223 @@ def reactor_input_panel(name):
                 key=f"{name}_baffle_width",
             )
 
+    # -----------------------------------------------------
+    # AGITATOR TRAIN
+    # -----------------------------------------------------
 
-        # ====================================================
-        # AGITATOR TRAIN
-        # ====================================================
+    initialize_agitators(name)
+
+    agitator_ids = st.session_state[
+        f"{name}_agitator_ids"
+    ]
+
+    with st.container(border=True):
 
         st.markdown(
-            '<div class="subsection-header">'
-            'Agitator Train'
-            '</div>',
+            '<div class="subsection-header">4. Agitator Train</div>',
             unsafe_allow_html=True,
         )
 
-        st.markdown(
-            """
-            <div class="info-note">
-            Each impeller is treated as an independent stage.
-            Use <b>Add Agitator Stage</b> to create another impeller
-            and <b>Remove</b> to delete an existing stage.
-            Stage settings are retained when the train is modified.
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.caption(
+            "Each agitator is configured independently. "
+            "Use Add Agitator / Remove to define the shaft arrangement."
         )
 
-        stage_state_key = (
-            f"stage_ids_{name}"
+        # -----------------------------------------------
+        # ADD / REMOVE
+        # -----------------------------------------------
+
+        c1, c2, c3 = st.columns(
+            [2, 2, 6]
         )
 
-        stage_ids = st.session_state[
-            stage_state_key
-        ]
+        with c1:
 
-
-        # ----------------------------------------------------
-        # ADD / REMOVE CONTROLS
-        # ----------------------------------------------------
-
-        add_col, spacer, count_col = st.columns(
-            [1.5, 5, 1.5]
-        )
-
-        with add_col:
-
-            if st.button(
-                "＋ Add Agitator Stage",
-                key=f"{name}_add_stage",
+            st.button(
+                "＋ Add Agitator",
+                key=f"{name}_add_agitator",
                 use_container_width=True,
-            ):
-
-                if len(stage_ids) < 8:
-
-                    stage_ids.append(
-                        create_stage_id()
-                    )
-
-                    st.session_state[
-                        stage_state_key
-                    ] = stage_ids
-
-                    st.rerun()
-
-                else:
-
-                    st.warning(
-                        "Maximum 8 agitator stages allowed."
-                    )
-
-        with count_col:
-
-            st.metric(
-                "Stages",
-                len(stage_ids),
+                on_click=add_agitator,
+                args=(name,),
             )
 
+        with c2:
 
-        # ----------------------------------------------------
-        # STAGE CONFIGURATION
-        # ----------------------------------------------------
+            if len(agitator_ids) > 1:
+
+                last_id = agitator_ids[-1]
+
+                st.button(
+                    "− Remove Last",
+                    key=f"{name}_remove_last",
+                    use_container_width=True,
+                    on_click=remove_agitator,
+                    args=(
+                        name,
+                        last_id,
+                    ),
+                )
+
+        with c3:
+
+            st.markdown(
+                f"**Current agitators: {len(agitator_ids)}**"
+            )
 
         stages = []
 
-        for stage_index, stage_id in enumerate(
-            stage_ids
+        # -----------------------------------------------
+        # AGITATOR CARDS
+        # -----------------------------------------------
+
+        for stage_number, agitator_id in enumerate(
+            agitator_ids,
+            start=1,
         ):
 
-            default_agitator = (
-                get_agitator_default(
-                    stage_index
-                )
-            )
+            spec_default = list(
+                AGITATORS.keys()
+            )[0]
 
-            default_spec = (
-                AGITATORS[
-                    default_agitator
-                ]
-                if default_agitator
-                else {}
-            )
+            with st.container(border=True):
 
-
-            with st.expander(
-                f"Stage {stage_index + 1}  ·  "
-                f"{default_agitator or 'Agitator'}",
-                expanded=True,
-            ):
-
-                # --------------------------------------------
-                # STAGE HEADER
-                # --------------------------------------------
-
-                header_col, remove_col = st.columns(
+                c1, c2 = st.columns(
                     [8, 1]
                 )
 
-                with header_col:
+                with c1:
 
                     st.markdown(
-                        f"""
-                        <div class="agitator-stage-title">
-                            Agitator Stage {stage_index + 1}
-                        </div>
-
-                        <div class="agitator-stage-subtitle">
-                            Independent impeller configuration
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
+                        f"**Agitator {stage_number}**"
                     )
 
-                with remove_col:
+                with c2:
 
-                    if st.button(
-                        "✕",
-                        key=f"{name}_remove_{stage_id}",
-                        help="Remove this agitator stage",
-                        use_container_width=True,
-                    ):
+                    if len(agitator_ids) > 1:
 
-                        if len(stage_ids) > 1:
+                        st.button(
+                            "✕",
+                            key=(
+                                f"{name}_remove_{agitator_id}"
+                            ),
+                            help=(
+                                "Remove this agitator"
+                            ),
+                            on_click=remove_agitator,
+                            args=(
+                                name,
+                                agitator_id,
+                            ),
+                        )
 
-                            stage_ids.remove(
-                                stage_id
-                            )
+                # ---------------------------------------
+                # AGITATOR TYPE
+                # ---------------------------------------
 
-                            st.session_state[
-                                stage_state_key
-                            ] = stage_ids
+                agitator_key = (
+                    f"{name}_agitator_type_{agitator_id}"
+                )
 
-                            st.rerun()
+                if (
+                    agitator_key
+                    not in st.session_state
+                ):
 
-                        else:
+                    st.session_state[
+                        agitator_key
+                    ] = spec_default
 
-                            st.warning(
-                                "At least one agitator stage is required."
-                            )
+                selected_agitator = st.selectbox(
+                    "Agitator Type",
+                    list(AGITATORS.keys()),
+                    key=agitator_key,
+                )
 
+                spec = AGITATORS[
+                    selected_agitator
+                ]
 
-                # --------------------------------------------
-                # BASIC AGITATOR PARAMETERS
-                # --------------------------------------------
+                st.caption(
+                    spec.get(
+                        "description_short",
+                        "Agitator geometry",
+                    )
+                )
+
+                # ---------------------------------------
+                # MAIN PARAMETERS
+                # ---------------------------------------
 
                 c1, c2, c3, c4 = st.columns(4)
 
+                default_DT = safe_float(
+                    spec.get(
+                        "D_T",
+                        0.4,
+                    ),
+                    0.4,
+                )
+
                 with c1:
-
-                    agitator_name = st.selectbox(
-                        "Agitator Type",
-                        agitator_names,
-                        index=(
-                            agitator_names.index(
-                                default_agitator
-                            )
-                            if default_agitator
-                            in agitator_names
-                            else 0
-                        ),
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "agitator",
-                        ),
-                    )
-
-                spec = AGITATORS[
-                    agitator_name
-                ]
-
-                with c2:
 
                     ratio = st.number_input(
                         "D/T Ratio",
                         min_value=0.05,
                         max_value=0.95,
-                        value=float(
-                            spec.get(
-                                "D_T",
-                                0.35,
-                            )
-                        ),
+                        value=default_DT,
                         step=0.01,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "DT",
-                        ),
-                    )
-
-                with c3:
-
-                    rpm = st.number_input(
-                        "Operating RPM",
-                        min_value=0.1,
-                        max_value=1500.0,
-                        value=115.0,
-                        step=1.0,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "rpm",
-                        ),
-                    )
-
-                with c4:
-
-                    blades = st.number_input(
-                        "Number of Blades",
-                        min_value=1,
-                        max_value=20,
-                        value=int(
-                            spec.get(
-                                "blades",
-                                4,
-                            )
-                        ),
-                        step=1,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "blades",
-                        ),
-                    )
-
-
-                # --------------------------------------------
-                # IMPELLER POSITION
-                # --------------------------------------------
-
-                st.markdown(
-                    "**Impeller Position & Geometry**"
-                )
-
-                c1, c2, c3 = st.columns(3)
-
-                impeller_D = (
-                    tank_D * ratio
-                )
-
-                with c1:
-
-                    st.number_input(
-                        "Calculated Impeller Diameter (m)",
-                        value=float(
-                            impeller_D
-                        ),
-                        disabled=True,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "diameter_display",
+                        key=(
+                            f"{name}_DT_{agitator_id}"
                         ),
                     )
 
                 with c2:
 
-                    clearance = st.number_input(
-                        "Bottom Clearance C (m)",
-                        min_value=0.001,
-                        max_value=max(
-                            tank_D,
-                            0.1,
-                        ),
-                        value=max(
-                            0.15 * tank_D,
-                            0.02,
-                        ),
-                        step=0.01,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "clearance",
+                    rpm = st.number_input(
+                        "RPM",
+                        min_value=0.1,
+                        max_value=1500.0,
+                        value=115.0,
+                        step=1.0,
+                        key=(
+                            f"{name}_rpm_{agitator_id}"
                         ),
                     )
 
                 with c3:
 
+                    default_clearance = max(
+                        0.15 * tank_D,
+                        0.02,
+                    )
+
+                    clearance = st.number_input(
+                        "Bottom Clearance (m)",
+                        min_value=0.001,
+                        max_value=max(
+                            tank_D,
+                            0.1,
+                        ),
+                        value=min(
+                            default_clearance,
+                            tank_D,
+                        ),
+                        step=0.01,
+                        key=(
+                            f"{name}_clearance_{agitator_id}"
+                        ),
+                    )
+
+                with c4:
+
                     default_elevation = min(
                         straight_H
                         * (
                             0.25
-                            + stage_index
+                            + (
+                                stage_number
+                                - 1
+                            )
                             * 0.25
                         ),
                         straight_H,
@@ -1249,163 +1048,141 @@ def reactor_input_panel(name):
                             straight_H,
                             0.1,
                         ),
-                        value=float(
-                            default_elevation
-                        ),
+                        value=default_elevation,
                         step=0.01,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "elevation",
+                        key=(
+                            f"{name}_elevation_{agitator_id}"
                         ),
                     )
 
-
-                # --------------------------------------------
-                # POWER / FLOW PARAMETERS
-                # --------------------------------------------
-
-                st.markdown(
-                    "**Hydrodynamic Correlation**"
-                )
+                # ---------------------------------------
+                # BLADES / Np / Nq
+                # ---------------------------------------
 
                 c1, c2, c3 = st.columns(3)
 
                 with c1:
 
-                    st.write(
-                        f"**Np:** "
-                        f"{fmt(spec.get('Np'), 4)}"
-                    )
-
-                    st.write(
-                        f"**Nq:** "
-                        f"{fmt(spec.get('Nq'), 4)}"
+                    blades = st.number_input(
+                        "Number of Blades",
+                        min_value=1,
+                        max_value=20,
+                        value=safe_int(
+                            spec.get(
+                                "blades",
+                                4,
+                            ),
+                            4,
+                        ),
+                        step=1,
+                        key=(
+                            f"{name}_blades_{agitator_id}"
+                        ),
                     )
 
                 with c2:
 
-                    use_override = st.checkbox(
-                        "Override Np / Nq",
-                        value=False,
-                        key=get_stage_key(
-                            name,
-                            stage_id,
-                            "override",
-                        ),
+                    np_available = spec.get(
+                        "Np",
+                        None,
                     )
 
-                np_value = spec.get(
-                    "Np"
-                )
-
-                nq_value = spec.get(
-                    "Nq"
-                )
-
-                if use_override:
-
-                    with c2:
+                    if np_available is None:
 
                         np_value = st.number_input(
                             "Power Number Np",
                             min_value=0.001,
                             max_value=50.0,
-                            value=float(
-                                spec.get(
-                                    "Np"
-                                    or 1.0
-                                )
-                            ),
+                            value=1.0,
                             step=0.05,
-                            key=get_stage_key(
-                                name,
-                                stage_id,
-                                "Np",
+                            key=(
+                                f"{name}_Np_{agitator_id}"
                             ),
                         )
 
-                    with c3:
+                    else:
+
+                        np_value = st.number_input(
+                            "Power Number Np",
+                            min_value=0.001,
+                            max_value=50.0,
+                            value=safe_float(
+                                np_available,
+                                1.0,
+                            ),
+                            step=0.05,
+                            key=(
+                                f"{name}_Np_{agitator_id}"
+                            ),
+                        )
+
+                with c3:
+
+                    nq_available = spec.get(
+                        "Nq",
+                        None,
+                    )
+
+                    if nq_available is None:
 
                         nq_value = st.number_input(
                             "Flow Number Nq",
                             min_value=0.001,
                             max_value=10.0,
-                            value=float(
-                                spec.get(
-                                    "Nq"
-                                    or 0.5
-                                )
+                            value=0.5,
+                            step=0.05,
+                            key=(
+                                f"{name}_Nq_{agitator_id}"
+                            ),
+                        )
+
+                    else:
+
+                        nq_value = st.number_input(
+                            "Flow Number Nq",
+                            min_value=0.001,
+                            max_value=10.0,
+                            value=safe_float(
+                                nq_available,
+                                0.5,
                             ),
                             step=0.05,
-                            key=get_stage_key(
-                                name,
-                                stage_id,
-                                "Nq",
+                            key=(
+                                f"{name}_Nq_{agitator_id}"
                             ),
                         )
 
-                else:
+                # ---------------------------------------
+                # CALCULATED DIAMETER
+                # ---------------------------------------
 
-                    with c3:
+                impeller_D = tank_D * ratio
 
-                        st.write(
-                            f"**Correlation:** "
-                            f"Np = {fmt(np_value, 4)}  |  "
-                            f"Nq = {fmt(nq_value, 4)}"
-                        )
-
-
-                if np_value is None:
-
-                    st.warning(
-                        "Np is unavailable for this agitator. "
-                        "Enter validated vendor/literature data."
-                    )
-
-                if nq_value is None:
-
-                    st.warning(
-                        "Nq is unavailable for this agitator. "
-                        "Enter validated vendor/literature data."
-                    )
-
-
-                # --------------------------------------------
-                # DESCRIPTION
-                # --------------------------------------------
-
-                description = spec.get(
-                    "description_short",
-                    "",
+                st.info(
+                    f"Impeller Diameter = "
+                    f"{impeller_D:.3f} m "
+                    f"(D/T = {ratio:.3f})"
                 )
 
-                if description:
-
-                    st.caption(
-                        description
-                    )
-
-
-                # --------------------------------------------
-                # APPEND STAGE
-                # --------------------------------------------
+                # ---------------------------------------
+                # STAGE DATA
+                # ---------------------------------------
 
                 stages.append(
                     {
-                        "stage": stage_index + 1,
+                        "stage": stage_number,
 
-                        "agitator":
-                            agitator_name,
+                        "agitator": selected_agitator,
 
-                        "Np":
-                            np_value,
+                        "Np": np_value,
 
-                        "Nq":
-                            nq_value,
+                        "Nq": nq_value,
 
                         "impeller_diameter_m":
                             impeller_D,
+
+                        "D_T":
+                            ratio,
 
                         "rpm":
                             rpm,
@@ -1439,28 +1216,27 @@ def reactor_input_panel(name):
                     }
                 )
 
+    # -----------------------------------------------------
+    # SOLIDS
+    # -----------------------------------------------------
 
-        # ====================================================
-        # SOLIDS SUSPENSION
-        # ====================================================
+    solids_data = {
+        "solids_wt_percent": 0.0,
+        "particle_diameter_m": 0.0005,
+        "solid_density_kg_m3": 1500.0,
+        "S": 4.5,
+    }
 
-        solids_data = {
-            "solids_wt_percent": 0.0,
-            "particle_diameter_m": 0.0005,
-            "solid_density_kg_m3": 1500.0,
-            "S": 4.5,
-        }
+    if process_type in [
+        "Solid-Liquid",
+        "Gas-Liquid-Solid",
+        "Crystallization",
+    ]:
 
-        if process_type in [
-            "Solid-Liquid",
-            "Gas-Liquid-Solid",
-            "Crystallization",
-        ]:
+        with st.container(border=True):
 
             st.markdown(
-                '<div class="subsection-header">'
-                'Solids Suspension Basis'
-                '</div>',
+                '<div class="subsection-header">5. Solids Suspension Basis</div>',
                 unsafe_allow_html=True,
             )
 
@@ -1524,71 +1300,70 @@ def reactor_input_panel(name):
                     S_factor,
             }
 
+    # -----------------------------------------------------
+    # RETURN
+    # -----------------------------------------------------
 
-        # ====================================================
-        # RETURN
-        # ====================================================
+    return {
+        "name":
+            name,
 
-        return {
-            "name":
-                name,
+        "working_volume_m3":
+            working_volume,
 
-            "working_volume_m3":
-                working_volume,
+        "density_kg_m3":
+            density,
 
-            "density_kg_m3":
-                density,
+        "viscosity_cp":
+            viscosity_cp,
 
-            "viscosity_cp":
-                viscosity_cp,
+        "viscosity_pa_s":
+            viscosity_cp / 1000.0,
 
-            "viscosity_pa_s":
-                viscosity_cp / 1000.0,
+        "surface_tension_mN_m":
+            surface_tension,
 
-            "surface_tension_mN_m":
-                surface_tension,
+        "surface_tension_n_m":
+            surface_tension / 1000.0,
 
-            "surface_tension_n_m":
-                surface_tension / 1000.0,
+        "tank_diameter_m":
+            tank_D,
 
-            "tank_diameter_m":
-                tank_D,
+        "straight_height_m":
+            straight_H,
 
-            "straight_height_m":
-                straight_H,
+        "bottom_type":
+            bottom_type,
 
-            "bottom_type":
-                bottom_type,
+        "top_type":
+            top_type,
 
-            "top_type":
-                top_type,
+        "total_volume_m3":
+            total_volume,
 
-            "total_volume_m3":
-                total_volume,
+        "liquid_height_m":
+            liquid_height,
 
-            "liquid_height_m":
-                liquid_height,
+        "fill_percent":
+            fill,
 
-            "fill_percent":
-                fill,
+        "baffles":
+            int(baffles),
 
-            "baffles":
-                int(baffles),
+        "baffle_width_ratio":
+            baffle_width_ratio,
 
-            "baffle_width_ratio":
-                baffle_width_ratio,
+        "stages":
+            stages,
 
-            "stages":
-                stages,
-
-            "solids":
-                solids_data,
-        }
+        "solids":
+            solids_data,
+    }
 
 
-# ============================================================
+# =========================================================
 # COLLECT REACTOR DATA
-# ============================================================
+# =========================================================
 
 reactors = []
 
@@ -1603,9 +1378,9 @@ for reactor_name in reactor_names:
     )
 
 
-# ============================================================
-# CALCULATE ALL REACTORS
-# ============================================================
+# =========================================================
+# CALCULATE REACTORS
+# =========================================================
 
 for reactor in reactors:
 
@@ -1619,8 +1394,7 @@ for reactor in reactors:
     except Exception as exc:
 
         st.error(
-            f"Calculation error for "
-            f"{reactor['name']} reactor: {exc}"
+            f"{reactor['name']} reactor calculation error: {exc}"
         )
 
         results = []
@@ -1635,10 +1409,9 @@ for reactor in reactors:
             "total_torque_Nm": 0.0,
         }
 
-
-    # ========================================================
-    # NJS
-    # ========================================================
+    # -----------------------------------------------------
+    # NJS CALCULATION
+    # -----------------------------------------------------
 
     if process_type in [
         "Solid-Liquid",
@@ -1646,9 +1419,7 @@ for reactor in reactors:
         "Crystallization",
     ]:
 
-        solids = reactor[
-            "solids"
-        ]
+        solids = reactor["solids"]
 
         for stage in results:
 
@@ -1668,13 +1439,14 @@ for reactor in reactors:
                     reactor[
                         "density_kg_m3"
                     ],
-                    solids["S"],
+                    solids[
+                        "S"
+                    ],
                 )
 
             except Exception:
 
                 njs = None
-
 
             stage["njs_rpm"] = njs
 
@@ -1683,26 +1455,22 @@ for reactor in reactors:
                 stage["Njs_RPM"] = njs
 
                 stage["N_over_Njs"] = (
-                    stage["rpm"]
-                    / njs
+                    stage["rpm"] / njs
                 )
 
             else:
 
                 stage["N_over_Njs"] = None
 
-
     reactor["results"] = results
 
     reactor["train"] = train
 
-
-    # ========================================================
-    # GEOMETRY DICTIONARY
-    # ========================================================
+    # -----------------------------------------------------
+    # GEOMETRY OBJECT
+    # -----------------------------------------------------
 
     geometry = {
-
         "working_volume_m3":
             reactor[
                 "working_volume_m3"
@@ -1741,10 +1509,9 @@ for reactor in reactors:
 
     reactor["geometry"] = geometry
 
-
-    # ========================================================
+    # -----------------------------------------------------
     # VALIDATION
-    # ========================================================
+    # -----------------------------------------------------
 
     try:
 
@@ -1758,14 +1525,11 @@ for reactor in reactors:
 
         reactor["checks"] = [
             {
-                "severity":
-                    "REVIEW",
-
+                "severity": "REVIEW",
                 "message":
                     f"Validation calculation error: {exc}",
             }
         ]
-
 
     try:
 
@@ -1777,7 +1541,6 @@ for reactor in reactors:
 
         reactor["status"] = "REVIEW"
 
-
     try:
 
         reactor["recommendations"] = recommendations(
@@ -1788,13 +1551,13 @@ for reactor in reactors:
     except Exception as exc:
 
         reactor["recommendations"] = [
-            f"Recommendation engine unavailable: {exc}"
+            f"Recommendation engine error: {exc}"
         ]
 
 
-# ============================================================
+# =========================================================
 # ACTIVE REACTOR
-# ============================================================
+# =========================================================
 
 active_reactor = reactors[-1]
 
@@ -1807,91 +1570,75 @@ active_status = active_reactor[
 ]
 
 
-# ============================================================
-# ENGINEERING KPI OVERVIEW
-# ============================================================
+# =========================================================
+# ENGINEERING PERFORMANCE OVERVIEW
+# =========================================================
 
 st.markdown(
-    '<div class="section-header">'
-    '03 · Engineering Performance Overview'
-    '</div>',
+    '<div class="section-header">Engineering Performance Overview</div>',
     unsafe_allow_html=True,
 )
 
-kpis = [
+kpi_columns = st.columns(8)
 
+
+def train_value(
+    key,
+    default=0.0,
+):
+
+    value = active_train.get(
+        key,
+        default,
+    )
+
+    return value if value is not None else default
+
+
+kpis = [
     (
         "Working Volume",
-        fmt(
-            active_reactor[
-                "working_volume_m3"
-            ],
-            2,
-        ),
+        f"{active_reactor['working_volume_m3']:.2f}",
         "m³",
     ),
 
     (
         "Operating Fill",
-        fmt(
-            active_reactor[
-                "fill_percent"
-            ],
-            1,
-        ),
+        f"{active_reactor['fill_percent']:.1f}",
         "%",
     ),
 
     (
         "Shaft Power",
-        fmt(
-            active_train.get(
-                "total_power_kw"
-            ),
-            2,
-        ),
+        f"{train_value('total_power_kw'):.2f}",
         "kW",
     ),
 
     (
-        "Power Density",
-        fmt(
-            active_train.get(
-                "P_per_V_kW_m3"
-            ),
-            3,
-        ),
+        "P/V",
+        f"{train_value('P_per_V_kW_m3'):.3f}",
         "kW/m³",
     ),
 
     (
         "Total Q",
-        fmt(
-            active_train.get(
-                "total_Q_m3_h"
-            ),
-            1,
-        ),
+        f"{train_value('total_Q_m3_h'):.1f}",
         "m³/h",
     ),
 
     (
         "Q/V",
-        fmt(
-            active_train.get(
-                "Q_per_volume_1_s"
-            ),
-            4,
-        ),
+        f"{train_value('Q_per_volume_1_s'):.4f}",
         "s⁻¹",
     ),
 
     (
         "Maximum Re",
         (
-            f"{active_train.get('maximum_reynolds'):,.0f}"
-            if active_train.get(
-                "maximum_reynolds"
+            f"{train_value('maximum_reynolds'):,.0f}"
+            if train_value(
+                "maximum_reynolds",
+                None,
             )
             else "N/A"
         ),
@@ -1899,16 +1646,12 @@ kpis = [
     ),
 
     (
-        "Design Status",
-        str(active_status),
+        "Status",
+        active_status,
         "screening",
     ),
 ]
 
-
-kpi_columns = st.columns(
-    len(kpis)
-)
 
 for col, (
     label,
@@ -1923,17 +1666,17 @@ for col, (
 
         st.markdown(
             f"""
-            <div class="metric-card">
+            <div class="kpi-card">
 
-                <div class="metric-label">
+                <div class="kpi-label">
                     {label}
                 </div>
 
-                <div class="metric-value">
+                <div class="kpi-value">
                     {value}
                 </div>
 
-                <div class="metric-unit">
+                <div class="kpi-unit">
                     {unit}
                 </div>
 
@@ -1943,9 +1686,9 @@ for col, (
         )
 
 
-# ============================================================
-# MAIN TABS
-# ============================================================
+# =========================================================
+# TABS
+# =========================================================
 
 (
     tab_basis,
@@ -1961,7 +1704,7 @@ for col, (
         "Design Basis",
         "Reactor Geometry",
         "Agitator Train",
-        "Mixing Performance",
+        "Performance",
         "Scale-Up",
         "Validation",
         "3D Mixing",
@@ -1970,9 +1713,9 @@ for col, (
 )
 
 
-# ============================================================
+# =========================================================
 # DESIGN BASIS
-# ============================================================
+# =========================================================
 
 with tab_basis:
 
@@ -1983,43 +1726,53 @@ with tab_basis:
     guidance = {
 
         "General Mixing":
-            "Primary: Q/V and blend time. Secondary: P/V and Reynolds number.",
+            "Primary focus: circulation, Q/V and blend time. "
+            "P/V and Reynolds number provide supporting criteria.",
 
         "Liquid-Liquid":
-            "Prioritize bulk circulation, phase contact, dispersion and blend time.",
+            "Prioritize bulk circulation, phase contact, "
+            "dispersion and blend performance.",
 
         "Solid-Liquid":
-            "Primary criterion: N/Njs. Secondary: P/V, Q/V and impeller clearance.",
+            "Primary criterion is N/Njs. "
+            "Also review P/V, Q/V, clearance and solids loading.",
 
         "Gas-Liquid":
-            "Prioritize gas dispersion, gas-liquid contacting and kLa.",
+            "Prioritize gas dispersion, P/V, gas flow and kLa.",
 
         "Gas-Liquid-Solid":
-            "Solids suspension and gas dispersion must be evaluated simultaneously.",
+            "Simultaneously evaluate solids suspension and "
+            "gas dispersion.",
 
         "Crystallization":
-            "Balance suspension quality, circulation, shear and crystal attrition.",
+            "Balance suspension, circulation, shear and "
+            "crystal-growth requirements.",
 
         "High-Viscosity":
-            "Prioritize torque, P/V, Reynolds number and mechanical loading.",
+            "Prioritize torque, P/V, Reynolds number and "
+            "mechanical loading.",
 
         "Heat-Controlled Reaction":
-            "Mixing performance and heat-transfer capacity must both be demonstrated.",
+            "Mixing performance and heat-transfer capacity "
+            "must both be demonstrated.",
     }
 
     scaleup_description = {
 
         "Constant P/V":
-            "Maintains power density and is widely used when energy intensity is the governing similarity parameter.",
+            "Maintains power density and is widely used "
+            "for mixing-intensity comparison.",
 
         "Constant Tip Speed":
-            "Maintains impeller peripheral velocity and can be useful where local shear is important.",
+            "Maintains impeller peripheral velocity and "
+            "provides a useful shear-related comparison.",
 
         "Constant Q/V":
             "Maintains circulation or turnover intensity.",
 
         "Constant RPM":
-            "Provides direct mechanical speed comparison but is not generally a universal mixing similarity criterion.",
+            "Maintains mechanical operating speed but is "
+            "not generally a universal mixing similarity criterion.",
 
         "Constant Froude Number":
             "Maintains inertial/gravity similarity.",
@@ -2032,92 +1785,65 @@ with tab_basis:
 
     with c1:
 
-        st.markdown(
-            "### Process Requirement"
-        )
+        with st.container(border=True):
 
-        st.info(
-            guidance[
-                process_type
-            ]
-        )
+            st.markdown(
+                "### Process Requirement"
+            )
+
+            st.info(
+                guidance[
+                    process_type
+                ]
+            )
 
     with c2:
 
+        with st.container(border=True):
+
+            st.markdown(
+                "### Primary Scale-Up Criterion"
+            )
+
+            st.info(
+                scaleup_description[
+                    scaleup_basis
+                ]
+            )
+
+    with st.container(border=True):
+
         st.markdown(
-            "### Primary Scale-Up Criterion"
+            "### Engineering Governance"
         )
 
-        st.info(
-            scaleup_description[
-                scaleup_basis
-            ]
+        st.markdown(
+            """
+            <div class="engineering-note">
+
+            <b>Engineering principle:</b><br><br>
+
+            RPM alone should not be treated as a universal
+            scale-up criterion. Reactor scale-up should reconcile
+            functional mixing requirements such as P/V, Q/V,
+            impeller tip speed, Reynolds number, N/Njs,
+            blend time, gas dispersion, mass transfer and
+            heat-transfer performance.
+
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
 
-    st.markdown(
-        "### Engineering Governance"
-    )
-
-    st.markdown(
-        """
-        <div class="engineering-note">
-
-        <b>Engineering principle:</b>
-
-        RPM alone should not be treated as a universal scale-up
-        criterion. The selected scale-up basis should be reconciled
-        against functional performance including P/V, Q/V, tip speed,
-        Reynolds number, solids suspension, gas dispersion, blend time,
-        heat transfer and mechanical loading.
-
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    st.markdown(
-        "### Study Scope"
-    )
-
-    scope_df = pd.DataFrame(
-        {
-            "Parameter": [
-                "Project",
-                "Study Mode",
-                "Process Requirement",
-                "Primary Scale-Up Basis",
-                "Engineering Focus",
-            ],
-
-            "Selected Value": [
-                project_name,
-                study_mode,
-                process_type,
-                scaleup_basis,
-                ", ".join(
-                    focus_parameters
-                ),
-            ],
-        }
-    )
-
-    st.dataframe(
-        scope_df,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ============================================================
-# REACTOR GEOMETRY TAB
-# ============================================================
+# =========================================================
+# GEOMETRY TAB
+# =========================================================
 
 with tab_geometry:
 
     st.markdown(
-        "## Reactor Geometry Comparison"
+        "## Reactor Geometry"
     )
 
     geometry_rows = []
@@ -2130,43 +1856,67 @@ with tab_geometry:
                     reactor["name"],
 
                 "Working Volume (m³)":
-                    reactor[
-                        "working_volume_m3"
-                    ],
+                    round(
+                        reactor[
+                            "working_volume_m3"
+                        ],
+                        3,
+                    ),
 
                 "Vessel Volume (m³)":
-                    reactor[
-                        "total_volume_m3"
-                    ],
+                    round(
+                        reactor[
+                            "total_volume_m3"
+                        ],
+                        3,
+                    ),
 
                 "Tank ID (m)":
-                    reactor[
-                        "tank_diameter_m"
-                    ],
-
-                "Straight Side (m)":
-                    reactor[
-                        "straight_height_m"
-                    ],
-
-                "Liquid Height (m)":
-                    reactor[
-                        "liquid_height_m"
-                    ],
-
-                "Fill (%)":
-                    reactor[
-                        "fill_percent"
-                    ],
-
-                "H/T":
-                    safe_ratio(
-                        reactor[
-                            "liquid_height_m"
-                        ],
+                    round(
                         reactor[
                             "tank_diameter_m"
                         ],
+                        3,
+                    ),
+
+                "Straight Side (m)":
+                    round(
+                        reactor[
+                            "straight_height_m"
+                        ],
+                        3,
+                    ),
+
+                "Liquid Height (m)":
+                    round(
+                        reactor[
+                            "liquid_height_m"
+                        ],
+                        3,
+                    ),
+
+                "Fill (%)":
+                    round(
+                        reactor[
+                            "fill_percent"
+                        ],
+                        1,
+                    ),
+
+                "H/T":
+                    round(
+                        reactor[
+                            "liquid_height_m"
+                        ]
+                        /
+                        reactor[
+                            "tank_diameter_m"
+                        ]
+                        if reactor[
+                            "tank_diameter_m"
+                        ] > 0
+                        else 0,
+                        2,
                     ),
 
                 "Baffles":
@@ -2176,7 +1926,6 @@ with tab_geometry:
             }
         )
 
-
     st.dataframe(
         pd.DataFrame(
             geometry_rows
@@ -2184,7 +1933,6 @@ with tab_geometry:
         use_container_width=True,
         hide_index=True,
     )
-
 
     st.markdown(
         "### Geometry Review"
@@ -2195,73 +1943,47 @@ with tab_geometry:
         with st.container(border=True):
 
             st.markdown(
-                f"### ⚗️ {reactor['name']} Reactor"
+                f"**⚗️ {reactor['name']} Reactor**"
             )
 
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4 = st.columns(4)
 
-            with c1:
+            c1.metric(
+                "Tank Diameter",
+                f"{reactor['tank_diameter_m']:.3f} m",
+            )
 
-                st.metric(
-                    "Tank Diameter",
-                    f"{reactor['tank_diameter_m']:.3f} m",
-                )
+            c2.metric(
+                "Straight Side",
+                f"{reactor['straight_height_m']:.3f} m",
+            )
 
-            with c2:
+            c3.metric(
+                "Liquid Height",
+                f"{reactor['liquid_height_m']:.3f} m",
+            )
 
-                st.metric(
-                    "Straight Side",
-                    f"{reactor['straight_height_m']:.3f} m",
-                )
-
-            with c3:
-
-                st.metric(
-                    "Liquid Height",
-                    f"{reactor['liquid_height_m']:.3f} m",
-                )
-
-            with c4:
-
-                st.metric(
-                    "Vessel Volume",
-                    f"{reactor['total_volume_m3']:.2f} m³",
-                )
-
-            with c5:
-
-                st.metric(
-                    "Fill",
-                    f"{reactor['fill_percent']:.1f} %",
-                )
+            c4.metric(
+                "Operating Fill",
+                f"{reactor['fill_percent']:.1f} %",
+            )
 
 
-# ============================================================
-# AGITATOR TRAIN TAB
-# ============================================================
+# =========================================================
+# AGITATOR TAB
+# =========================================================
 
 with tab_agitator:
 
     st.markdown(
-        "## Independent Agitator Train"
+        "## Agitator Train Design"
     )
 
-    st.markdown(
-        """
-        <div class="info-note">
-
-        <b>Train philosophy:</b>
-        Each impeller is independently configured for type,
-        D/T ratio, RPM, elevation, clearance and hydrodynamic
-        correlation. This allows multi-impeller reactors to be
-        evaluated without forcing all impellers to use the same
-        operating parameters.
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.info(
+        "Agitators are configured in the Reactor Design section above. "
+        "The table below shows the calculated engineering performance "
+        "of each independent impeller."
     )
-
 
     for reactor in reactors:
 
@@ -2279,107 +2001,114 @@ with tab_agitator:
                 "njs_rpm"
             )
 
-            n_over_njs = (
-                stage.get(
-                    "N_over_Njs"
-                )
-            )
-
             rows.append(
                 {
                     "Stage":
                         stage.get(
-                            "stage"
+                            "stage",
+                            "",
                         ),
 
                     "Agitator":
                         stage.get(
-                            "agitator"
-                        ),
-
-                    "D (m)":
-                        stage.get(
-                            "impeller_diameter_m"
+                            "agitator",
+                            "",
                         ),
 
                     "D/T":
                         stage.get(
-                            "D_T"
+                            "D_T",
+                            None,
+                        ),
+
+                    "Impeller D (m)":
+                        stage.get(
+                            "impeller_diameter_m",
+                            None,
                         ),
 
                     "RPM":
                         stage.get(
-                            "rpm"
+                            "rpm",
+                            None,
                         ),
 
                     "Clearance (m)":
                         stage.get(
-                            "clearance_m"
+                            "clearance_m",
+                            None,
                         ),
 
                     "Elevation (m)":
                         stage.get(
-                            "elevation_m"
+                            "elevation_m",
+                            None,
                         ),
 
                     "Blades":
                         stage.get(
-                            "blades"
+                            "blades",
+                            None,
                         ),
 
                     "Np":
                         stage.get(
-                            "Np"
+                            "Np",
+                            None,
                         ),
 
                     "Nq":
                         stage.get(
-                            "Nq"
+                            "Nq",
+                            None,
                         ),
 
                     "Re":
                         stage.get(
-                            "Re"
+                            "Re",
+                            None,
                         ),
 
                     "Power (kW)":
                         stage.get(
-                            "power_kw"
-                        ),
-
-                    "Power (HP)":
-                        stage.get(
-                            "power_hp"
+                            "power_kw",
+                            None,
                         ),
 
                     "Q (m³/h)":
                         stage.get(
-                            "Q_m3_h"
+                            "Q_m3_h",
+                            None,
                         ),
 
                     "P/V":
                         stage.get(
-                            "power_per_volume_kw_m3"
+                            "power_per_volume_kw_m3",
+                            None,
                         ),
 
                     "Tip Speed (m/s)":
                         stage.get(
-                            "tip_speed_m_s"
+                            "tip_speed_m_s",
+                            None,
                         ),
 
                     "Torque (N·m)":
                         stage.get(
-                            "torque_Nm"
+                            "torque_Nm",
+                            None,
                         ),
 
                     "Njs (RPM)":
                         njs,
 
                     "N/Njs":
-                        n_over_njs,
+                        stage.get(
+                            "N_over_Njs",
+                            None,
+                        ),
                 }
             )
-
 
         if rows:
 
@@ -2396,9 +2125,9 @@ with tab_agitator:
             )
 
 
-# ============================================================
+# =========================================================
 # PERFORMANCE TAB
-# ============================================================
+# =========================================================
 
 with tab_performance:
 
@@ -2416,58 +2145,48 @@ with tab_performance:
             "train"
         ]
 
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1, c2, c3 = st.columns(3)
 
-        with c1:
+        c1.metric(
+            "Total Power",
+            f"{train.get('total_power_kw', 0):.2f} kW",
+        )
 
-            st.metric(
-                "Total Power",
-                f"{fmt(train.get('total_power_kw'), 2)} kW",
-            )
+        c2.metric(
+            "P/V",
+            f"{train.get('P_per_V_kW_m3', 0):.3f} kW/m³",
+        )
 
-        with c2:
+        c3.metric(
+            "Total Q",
+            f"{train.get('total_Q_m3_h', 0):.1f} m³/h",
+        )
 
-            st.metric(
-                "P/V",
-                f"{fmt(train.get('P_per_V_kW_m3'), 3)} kW/m³",
-            )
+        c1, c2, c3 = st.columns(3)
 
-        with c3:
+        c1.metric(
+            "Q/V",
+            f"{train.get('Q_per_volume_1_s', 0):.4f} s⁻¹",
+        )
 
-            st.metric(
-                "Total Q",
-                f"{fmt(train.get('total_Q_m3_h'), 1)} m³/h",
-            )
+        turnover = train.get(
+            "turnover_time_min",
+            None,
+        )
 
-        with c4:
+        c2.metric(
+            "Turnover Time",
+            (
+                f"{turnover:.3f} min"
+                if turnover
+                else "N/A"
+            ),
+        )
 
-            st.metric(
-                "Q/V",
-                f"{fmt(train.get('Q_per_volume_1_s'), 4)} s⁻¹",
-            )
-
-        with c5:
-
-            turnover = train.get(
-                "turnover_time_min"
-            )
-
-            st.metric(
-                "Turnover Time",
-                (
-                    f"{turnover:.3f} min"
-                    if turnover
-                    else "N/A"
-                ),
-            )
-
-        with c6:
-
-            st.metric(
-                "Total Torque",
-                f"{fmt(train.get('total_torque_Nm'), 1)} N·m",
-            )
-
+        c3.metric(
+            "Total Torque",
+            f"{train.get('total_torque_Nm', 0):.1f} N·m",
+        )
 
         performance_rows = []
 
@@ -2478,44 +2197,60 @@ with tab_performance:
             performance_rows.append(
                 {
                     "Stage":
-                        stage.get("stage"),
+                        stage.get(
+                            "stage",
+                            "",
+                        ),
 
                     "Agitator":
-                        stage.get("agitator"),
+                        stage.get(
+                            "agitator",
+                            "",
+                        ),
 
                     "Regime":
                         stage.get(
-                            "mixing_regime"
+                            "mixing_regime",
+                            "",
                         ),
 
                     "Re":
-                        stage.get("Re"),
+                        stage.get(
+                            "Re",
+                            None,
+                        ),
 
                     "Fr":
-                        stage.get("Fr"),
+                        stage.get(
+                            "Fr",
+                            None,
+                        ),
 
                     "Tip Speed (m/s)":
                         stage.get(
-                            "tip_speed_m_s"
+                            "tip_speed_m_s",
+                            None,
                         ),
 
                     "Power (kW)":
                         stage.get(
-                            "power_kw"
+                            "power_kw",
+                            None,
                         ),
 
                     "Q (m³/h)":
                         stage.get(
-                            "Q_m3_h"
+                            "Q_m3_h",
+                            None,
                         ),
 
                     "Torque (N·m)":
                         stage.get(
-                            "torque_Nm"
+                            "torque_Nm",
+                            None,
                         ),
                 }
             )
-
 
         if performance_rows:
 
@@ -2528,9 +2263,9 @@ with tab_performance:
             )
 
 
-# ============================================================
+# =========================================================
 # SCALE-UP TAB
-# ============================================================
+# =========================================================
 
 with tab_scaleup:
 
@@ -2541,119 +2276,134 @@ with tab_scaleup:
     if len(reactors) < 2:
 
         st.info(
-            "Select a comparison study mode in Study Configuration "
-            "to activate the scale-up evaluation."
+            "Select a comparison study mode above "
+            "to activate scale-up evaluation."
         )
 
     else:
 
         reference = reactors[0]
-
         target = reactors[-1]
 
         st.markdown(
             f"### {reference['name']} → {target['name']}"
         )
 
-        volume_factor = safe_ratio(
-            target[
-                "working_volume_m3"
-            ],
+        reference_volume = (
             reference[
                 "working_volume_m3"
-            ],
+            ]
         )
 
-        diameter_ratio = safe_ratio(
+        target_volume = (
+            target[
+                "working_volume_m3"
+            ]
+        )
+
+        volume_ratio = (
+            target_volume
+            /
+            reference_volume
+            if reference_volume > 0
+            else 0
+        )
+
+        diameter_ratio = (
             target[
                 "tank_diameter_m"
-            ],
+            ]
+            /
             reference[
                 "tank_diameter_m"
-            ],
+            ]
+            if reference[
+                "tank_diameter_m"
+            ] > 0
+            else 0
         )
 
-        pv_ratio = safe_ratio(
-            target["train"].get(
-                "P_per_V_kW_m3"
-            ),
-            reference["train"].get(
-                "P_per_V_kW_m3"
-            ),
+        reference_pv = (
+            reference[
+                "train"
+            ].get(
+                "P_per_V_kW_m3",
+                0,
+            )
         )
 
-        qv_ratio = safe_ratio(
-            target["train"].get(
-                "Q_per_volume_1_s"
-            ),
-            reference["train"].get(
-                "Q_per_volume_1_s"
-            ),
+        target_pv = (
+            target[
+                "train"
+            ].get(
+                "P_per_V_kW_m3",
+                0,
+            )
         )
 
+        reference_qv = (
+            reference[
+                "train"
+            ].get(
+                "Q_per_volume_1_s",
+                0,
+            )
+        )
+
+        target_qv = (
+            target[
+                "train"
+            ].get(
+                "Q_per_volume_1_s",
+                0,
+            )
+        )
+
+        pv_ratio = (
+            target_pv / reference_pv
+            if reference_pv > 0
+            else 0
+        )
+
+        qv_ratio = (
+            target_qv / reference_qv
+            if reference_qv > 0
+            else 0
+        )
 
         c1, c2, c3, c4 = st.columns(4)
 
-        with c1:
+        c1.metric(
+            "Volume Scale Factor",
+            f"{volume_ratio:.2f} ×",
+        )
 
-            st.metric(
-                "Volume Scale Factor",
-                (
-                    f"{volume_factor:.2f}"
-                    if volume_factor
-                    is not None
-                    else "N/A"
-                ),
-            )
+        c2.metric(
+            "Tank Diameter Ratio",
+            f"{diameter_ratio:.2f} ×",
+        )
 
-        with c2:
+        c3.metric(
+            "P/V Ratio",
+            f"{pv_ratio:.3f}",
+        )
 
-            st.metric(
-                "Tank Diameter Ratio",
-                (
-                    f"{diameter_ratio:.2f}"
-                    if diameter_ratio
-                    is not None
-                    else "N/A"
-                ),
-            )
+        c4.metric(
+            "Q/V Ratio",
+            f"{qv_ratio:.3f}",
+        )
 
-        with c3:
-
-            st.metric(
-                "P/V Ratio",
-                (
-                    f"{pv_ratio:.3f}"
-                    if pv_ratio
-                    is not None
-                    else "N/A"
-                ),
-            )
-
-        with c4:
-
-            st.metric(
-                "Q/V Ratio",
-                (
-                    f"{qv_ratio:.3f}"
-                    if qv_ratio
-                    is not None
-                    else "N/A"
-                ),
-            )
-
-
-        # ====================================================
+        # -------------------------------------------------
         # SCALE-UP CALCULATION
-        # ====================================================
+        # -------------------------------------------------
 
         st.markdown(
-            "### Primary Criterion Calculation"
+            "### Primary Scale-Up Calculation"
         )
 
         if (
-            reference["results"]
-            and target["results"]
+            reference.get("results")
+            and target.get("results")
         ):
 
             ref_stage = reference[
@@ -2664,17 +2414,17 @@ with tab_scaleup:
                 "results"
             ][0]
 
-
             reference_basis = {
-
                 "rpm":
                     ref_stage.get(
-                        "rpm"
+                        "rpm",
+                        0,
                     ),
 
                 "impeller_diameter_m":
                     ref_stage.get(
-                        "impeller_diameter_m"
+                        "impeller_diameter_m",
+                        0,
                     ),
 
                 "volume_m3":
@@ -2683,12 +2433,11 @@ with tab_scaleup:
                     ],
             }
 
-
             target_basis = {
-
                 "impeller_diameter_m":
                     target_stage.get(
-                        "impeller_diameter_m"
+                        "impeller_diameter_m",
+                        0,
                     ),
 
                 "volume_m3":
@@ -2696,7 +2445,6 @@ with tab_scaleup:
                         "working_volume_m3"
                     ],
             }
-
 
             try:
 
@@ -2707,46 +2455,39 @@ with tab_scaleup:
                 )
 
                 target_rpm = scale_result.get(
-                    "target_rpm"
+                    "target_rpm",
+                    None,
                 )
 
                 target_tip = scale_result.get(
-                    "target_tip_speed"
+                    "target_tip_speed",
+                    None,
                 )
 
                 c1, c2, c3 = st.columns(3)
 
-                with c1:
+                c1.metric(
+                    "Scale-Up Criterion",
+                    scaleup_basis,
+                )
 
-                    st.metric(
-                        "Scale-Up Criterion",
-                        scaleup_basis,
-                    )
+                c2.metric(
+                    "Calculated Target RPM",
+                    (
+                        f"{target_rpm:.1f} RPM"
+                        if target_rpm is not None
+                        else "N/A"
+                    ),
+                )
 
-                with c2:
-
-                    st.metric(
-                        "Calculated Target RPM",
-                        (
-                            f"{target_rpm:.1f} RPM"
-                            if target_rpm
-                            is not None
-                            else "N/A"
-                        ),
-                    )
-
-                with c3:
-
-                    st.metric(
-                        "Corresponding Tip Speed",
-                        (
-                            f"{target_tip:.2f} m/s"
-                            if target_tip
-                            is not None
-                            else "N/A"
-                        ),
-                    )
-
+                c3.metric(
+                    "Corresponding Tip Speed",
+                    (
+                        f"{target_tip:.2f} m/s"
+                        if target_tip is not None
+                        else "N/A"
+                    ),
+                )
 
             except Exception as exc:
 
@@ -2754,24 +2495,22 @@ with tab_scaleup:
                     f"Scale-up calculation error: {exc}"
                 )
 
-
         else:
 
             st.warning(
-                "Reference or target agitator results are unavailable."
+                "Scale-up requires at least one calculated "
+                "agitator stage in both reactors."
             )
 
-
-        # ====================================================
-        # COMPARISON TABLE
-        # ====================================================
+        # -------------------------------------------------
+        # COMPARISON
+        # -------------------------------------------------
 
         st.markdown(
-            "### Reference vs Target Comparison"
+            "### Reactor Comparison"
         )
 
         comparison_rows = [
-
             {
                 "Parameter":
                     "Working Volume",
@@ -2834,13 +2573,19 @@ with tab_scaleup:
                     "kW",
 
                 reference["name"]:
-                    reference["train"].get(
-                        "total_power_kw"
+                    reference[
+                        "train"
+                    ].get(
+                        "total_power_kw",
+                        0,
                     ),
 
                 target["name"]:
-                    target["train"].get(
-                        "total_power_kw"
+                    target[
+                        "train"
+                    ].get(
+                        "total_power_kw",
+                        0,
                     ),
             },
 
@@ -2852,13 +2597,19 @@ with tab_scaleup:
                     "kW/m³",
 
                 reference["name"]:
-                    reference["train"].get(
-                        "P_per_V_kW_m3"
+                    reference[
+                        "train"
+                    ].get(
+                        "P_per_V_kW_m3",
+                        0,
                     ),
 
                 target["name"]:
-                    target["train"].get(
-                        "P_per_V_kW_m3"
+                    target[
+                        "train"
+                    ].get(
+                        "P_per_V_kW_m3",
+                        0,
                     ),
             },
 
@@ -2870,13 +2621,19 @@ with tab_scaleup:
                     "m³/h",
 
                 reference["name"]:
-                    reference["train"].get(
-                        "total_Q_m3_h"
+                    reference[
+                        "train"
+                    ].get(
+                        "total_Q_m3_h",
+                        0,
                     ),
 
                 target["name"]:
-                    target["train"].get(
-                        "total_Q_m3_h"
+                    target[
+                        "train"
+                    ].get(
+                        "total_Q_m3_h",
+                        0,
                     ),
             },
 
@@ -2888,13 +2645,19 @@ with tab_scaleup:
                     "s⁻¹",
 
                 reference["name"]:
-                    reference["train"].get(
-                        "Q_per_volume_1_s"
+                    reference[
+                        "train"
+                    ].get(
+                        "Q_per_volume_1_s",
+                        0,
                     ),
 
                 target["name"]:
-                    target["train"].get(
-                        "Q_per_volume_1_s"
+                    target[
+                        "train"
+                    ].get(
+                        "Q_per_volume_1_s",
+                        0,
                     ),
             },
 
@@ -2906,35 +2669,46 @@ with tab_scaleup:
                     "m/s",
 
                 reference["name"]:
-                    reference["train"].get(
-                        "average_tip_speed_m_s"
+                    reference[
+                        "train"
+                    ].get(
+                        "average_tip_speed_m_s",
+                        0,
                     ),
 
                 target["name"]:
-                    target["train"].get(
-                        "average_tip_speed_m_s"
+                    target[
+                        "train"
+                    ].get(
+                        "average_tip_speed_m_s",
+                        0,
                     ),
             },
 
             {
                 "Parameter":
-                    "Maximum Re",
+                    "Maximum Reynolds Number",
 
                 "Unit":
                     "-",
 
                 reference["name"]:
-                    reference["train"].get(
-                        "maximum_reynolds"
+                    reference[
+                        "train"
+                    ].get(
+                        "maximum_reynolds",
+                        None,
                     ),
 
                 target["name"]:
-                    target["train"].get(
-                        "maximum_reynolds"
+                    target[
+                        "train"
+                    ].get(
+                        "maximum_reynolds",
+                        None,
                     ),
             },
         ]
-
 
         st.dataframe(
             pd.DataFrame(
@@ -2944,27 +2718,18 @@ with tab_scaleup:
             hide_index=True,
         )
 
-
-        st.markdown(
-            """
-            <div class="engineering-note">
-
-            <b>Scale-up governance:</b>
-            Calculated target RPM is a starting-point engineering
-            value. Final selection should reconcile P/V, Q/V,
-            tip speed, Reynolds number, N/Njs, blend time,
-            gas dispersion, heat-transfer requirements,
-            motor/gearbox torque and vendor recommendations.
-
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.warning(
+            "Scale-up RPM is a preliminary engineering "
+            "starting point. Final agitator selection should "
+            "reconcile P/V, Q/V, tip speed, Reynolds number, "
+            "N/Njs, blend time, gas dispersion, heat transfer "
+            "and mechanical design requirements."
         )
 
 
-# ============================================================
+# =========================================================
 # VALIDATION TAB
-# ============================================================
+# =========================================================
 
 with tab_validation:
 
@@ -2974,31 +2739,21 @@ with tab_validation:
 
     if active_status == "PASS":
 
-        st.markdown(
-            '<div class="status-pass">'
-            '✓ Overall Screening Status: PASS'
-            '</div>',
-            unsafe_allow_html=True,
+        st.success(
+            "Overall screening status: PASS"
         )
 
     elif active_status == "REVIEW":
 
-        st.markdown(
-            '<div class="status-review">'
-            '⚠ Overall Screening Status: REVIEW'
-            '</div>',
-            unsafe_allow_html=True,
+        st.warning(
+            "Overall screening status: REVIEW"
         )
 
     else:
 
-        st.markdown(
-            '<div class="status-fail">'
-            '✕ Overall Screening Status: FAIL'
-            '</div>',
-            unsafe_allow_html=True,
+        st.error(
+            "Overall screening status: FAIL"
         )
-
 
     for reactor in reactors:
 
@@ -3011,91 +2766,85 @@ with tab_validation:
         ]
 
         status_counts = {
-
             "PASS":
                 sum(
-                    x.get("severity")
-                    == "PASS"
+                    x.get(
+                        "severity",
+                        "",
+                    ) == "PASS"
                     for x in checks
                 ),
 
             "REVIEW":
                 sum(
-                    x.get("severity")
-                    == "REVIEW"
+                    x.get(
+                        "severity",
+                        "",
+                    ) == "REVIEW"
                     for x in checks
                 ),
 
             "FAIL":
                 sum(
-                    x.get("severity")
-                    == "FAIL"
+                    x.get(
+                        "severity",
+                        "",
+                    ) == "FAIL"
                     for x in checks
                 ),
         }
 
-
         c1, c2, c3 = st.columns(3)
 
-        with c1:
+        c1.metric(
+            "PASS",
+            status_counts["PASS"],
+        )
 
-            st.metric(
-                "PASS",
-                status_counts[
-                    "PASS"
-                ],
-            )
+        c2.metric(
+            "REVIEW",
+            status_counts["REVIEW"],
+        )
 
-        with c2:
+        c3.metric(
+            "FAIL",
+            status_counts["FAIL"],
+        )
 
-            st.metric(
-                "REVIEW",
-                status_counts[
-                    "REVIEW"
-                ],
-            )
+        validation_rows = []
 
-        with c3:
+        for item in checks:
 
-            st.metric(
-                "FAIL",
-                status_counts[
-                    "FAIL"
-                ],
-            )
-
-
-        validation_df = pd.DataFrame(
-            [
+            validation_rows.append(
                 {
                     "Status":
-                        x.get(
-                            "severity"
+                        item.get(
+                            "severity",
+                            "REVIEW",
                         ),
 
                     "Engineering Check":
-                        x.get(
-                            "message"
+                        item.get(
+                            "message",
+                            "",
                         ),
                 }
+            )
 
-                for x in checks
-            ]
-        )
-
-
-        if not validation_df.empty:
+        if validation_rows:
 
             st.dataframe(
-                validation_df,
+                pd.DataFrame(
+                    validation_rows
+                ),
                 use_container_width=True,
                 hide_index=True,
             )
 
 
-# ============================================================
-# 3D VISUALIZATION TAB
-# ============================================================
+# =========================================================
+# 3D VISUALIZATION
+# =========================================================
 
 with tab_3d:
 
@@ -3106,25 +2855,22 @@ with tab_3d:
     selected_name = st.selectbox(
         "Select Reactor",
         [
-            x["name"]
-            for x in reactors
+            reactor["name"]
+            for reactor in reactors
         ],
         key="selected_3d_reactor",
     )
 
-
     selected = next(
-        x
-        for x in reactors
-        if x["name"]
+        reactor
+        for reactor in reactors
+        if reactor["name"]
         == selected_name
     )
-
 
     try:
 
         fig = create_reactor_figure(
-
             tank_diameter_m=
                 selected[
                     "tank_diameter_m"
@@ -3161,22 +2907,15 @@ with tab_3d:
                 ],
         )
 
-
         st.plotly_chart(
             fig,
             use_container_width=True,
             config={
-                "displayModeBar":
-                    True,
-
-                "scrollZoom":
-                    True,
-
-                "displaylogo":
-                    False,
+                "displayModeBar": True,
+                "scrollZoom": True,
+                "displaylogo": False,
             },
         )
-
 
     except Exception as exc:
 
@@ -3184,29 +2923,17 @@ with tab_3d:
             f"3D visualization error: {exc}"
         )
 
-
-    st.markdown(
-        """
-        <div class="info-note">
-
-        <b>Visualization scope:</b>
-        The 3D model represents vessel geometry, heads,
-        liquid level, baffles, impeller arrangement and
-        conceptual mixing/circulation features.
-
-        It is not a CFD solution and does not represent
-        validated velocity, pressure, turbulence,
-        species-concentration or temperature fields.
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.info(
+        "The 3D model is an engineering visualization of "
+        "vessel geometry, impeller arrangement, baffles and "
+        "conceptual mixing. It is not a CFD solution for "
+        "velocity, pressure, turbulence or species concentration."
     )
 
 
-# ============================================================
-# ENGINEERING REPORT TAB
-# ============================================================
+# =========================================================
+# ENGINEERING REPORT
+# =========================================================
 
 with tab_report:
 
@@ -3216,9 +2943,7 @@ with tab_report:
 
     selected = reactors[-1]
 
-
     report_data = {
-
         "project_name":
             project_name,
 
@@ -3257,67 +2982,53 @@ with tab_report:
             ],
     }
 
-
     try:
 
         pdf_bytes = build_pdf(
             report_data
         )
 
-
         st.download_button(
-
-            label=
-                "📄 Download Engineering PDF",
-
-            data=
-                pdf_bytes,
-
-            file_name=
-                "reactor_scaleup_engineering_report.pdf",
-
-            mime=
-                "application/pdf",
-
-            use_container_width=
-                True,
+            label="📄 Download Engineering PDF",
+            data=pdf_bytes,
+            file_name=(
+                "reactor_scaleup_engineering_report.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
         )
-
 
     except Exception as exc:
 
         st.error(
-            f"Unable to generate engineering report: {exc}"
+            f"Report generation error: {exc}"
         )
-
 
     st.markdown(
         "### Engineering Recommendation"
     )
 
-
     for item in selected[
         "recommendations"
     ]:
 
-        st.info(
-            item
-        )
+        st.info(item)
 
 
-# ============================================================
-# FINAL DISCLAIMER
-# ============================================================
+# =========================================================
+# FOOTER
+# =========================================================
 
 st.divider()
 
 st.caption(
     "Preliminary engineering screening tool. "
-    "Np/Nq values are representative unless overridden "
-    "with validated vendor or literature data. Njs, blend "
-    "time, kLa and heat-transfer calculations require "
-    "system-specific validation. Final equipment selection "
-    "must include vendor data, pilot/plant validation, "
-    "mechanical design, process safety and applicable "
-    "engineering standards."
+    "Np/Nq values should be based on validated agitator "
+    "geometry, vendor data or reliable literature correlations. "
+    "Njs, blend time, kLa and heat-transfer calculations "
+    "require system-specific validation. Final equipment "
+    "selection must include vendor confirmation, mechanical "
+    "design, process safety review and applicable engineering "
+    "standards."
 )
+```
