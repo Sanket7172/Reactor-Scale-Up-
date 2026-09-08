@@ -1,3 +1,4 @@
+```python
 import pandas as pd
 import streamlit as st
 
@@ -141,11 +142,12 @@ st.markdown(
         margin-top: 2px;
     }
 
-    .engineering-note {
-        background: white;
-        border: 1px solid #dce3ec;
-        border-radius: 12px;
-        padding: 16px;
+    .engineering-warning {
+        padding: 12px 15px;
+        border-radius: 10px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #9a3412;
         margin-top: 10px;
         margin-bottom: 10px;
     }
@@ -242,7 +244,12 @@ def safe_float(value, default=0.0):
         if value is None:
             return default
 
-        return float(value)
+        result = float(value)
+
+        if pd.isna(result):
+            return default
+
+        return result
 
     except Exception:
         return default
@@ -260,9 +267,6 @@ def safe_int(value, default=1):
 
 
 def get_train_value(train, key, default=0.0):
-    """
-    Safely retrieve a calculated train parameter.
-    """
     if not isinstance(train, dict):
         return default
 
@@ -274,57 +278,50 @@ def get_train_value(train, key, default=0.0):
     return value
 
 
-def get_qv_per_second(train, working_volume_m3):
+def get_qv_s(train, working_volume):
     """
     Returns Q/V in s^-1.
 
-    Supports multiple possible engine output names.
+    Priority:
+    1. Q_per_volume_1_s
+    2. Q_per_volume_h converted from h^-1
+    3. total_Q_m3_h / working_volume_m3 converted to s^-1
     """
 
     if not isinstance(train, dict):
         return 0.0
 
-    # Preferred current engine key
     value = train.get("Q_per_volume_1_s")
 
     if value is not None:
-        return safe_float(value, 0.0)
+        try:
+            return float(value)
+        except Exception:
+            pass
 
-    # Alternative key if engine provides Q/V in h^-1
     value = train.get("Q_per_volume_h")
 
     if value is not None:
-        qv_h = safe_float(value, 0.0)
-        return qv_h / 3600.0
+        try:
+            return float(value) / 3600.0
+        except Exception:
+            pass
 
-    # Derive directly from total flow
-    total_q = safe_float(
-        train.get("total_Q_m3_h"),
-        0.0,
-    )
+    total_q = train.get("total_Q_m3_h")
 
-    volume = safe_float(
-        working_volume_m3,
-        0.0,
-    )
+    if total_q is not None and safe_float(working_volume) > 0:
+        try:
+            qv_h = (
+                float(total_q)
+                / float(working_volume)
+            )
 
-    if volume > 0:
-        return total_q / volume / 3600.0
+            return qv_h / 3600.0
+
+        except Exception:
+            pass
 
     return 0.0
-
-
-def get_qv_per_hour(train, working_volume_m3):
-    """
-    Returns Q/V in h^-1.
-    """
-
-    qv_s = get_qv_per_second(
-        train,
-        working_volume_m3,
-    )
-
-    return qv_s * 3600.0
 
 
 def initialize_agitators(reactor_name):
@@ -332,7 +329,6 @@ def initialize_agitators(reactor_name):
     key = f"{reactor_name}_agitator_ids"
 
     if key not in st.session_state:
-
         st.session_state[key] = [1, 2]
 
 
@@ -368,41 +364,6 @@ def remove_agitator(
         for item in ids
         if item != agitator_id
     ]
-
-
-def get_default_agitator_spec(agitator_name):
-
-    try:
-
-        spec = AGITATORS.get(
-            agitator_name,
-            {},
-        )
-
-        if isinstance(spec, dict):
-            return spec
-
-    except Exception:
-        pass
-
-    return {}
-
-
-def get_stage_value(
-    stage,
-    key,
-    default=None,
-):
-
-    if not isinstance(stage, dict):
-        return default
-
-    value = stage.get(
-        key,
-        default,
-    )
-
-    return value
 
 
 # =========================================================
@@ -490,14 +451,12 @@ with st.container():
             "Gas-Liquid-Solid",
             "Crystallization",
         ]:
-
             focus_items.append("N/Njs")
 
         if process_type in [
             "Gas-Liquid",
             "Gas-Liquid-Solid",
         ]:
-
             focus_items.append("kLa")
 
         st.markdown("**Engineering Focus**")
@@ -704,6 +663,11 @@ def reactor_input_panel(name):
                 top_type,
             )
 
+            total_volume = safe_float(
+                total_volume,
+                0.0,
+            )
+
         except Exception:
 
             total_volume = 0.0
@@ -718,6 +682,11 @@ def reactor_input_panel(name):
                 top_type,
             )
 
+            liquid_height = safe_float(
+                liquid_height,
+                0.0,
+            )
+
         except Exception:
 
             liquid_height = 0.0
@@ -729,9 +698,20 @@ def reactor_input_panel(name):
                 total_volume,
             )
 
+            fill = safe_float(
+                fill,
+                0.0,
+            )
+
         except Exception:
 
-            fill = 0.0
+            fill = (
+                working_volume
+                / total_volume
+                * 100.0
+                if total_volume > 0
+                else 0.0
+            )
 
         c1, c2, c3, c4 = st.columns(4)
 
@@ -761,13 +741,30 @@ def reactor_input_panel(name):
             f"{H_T:.2f}",
         )
 
-        if (
-            total_volume > 0
-            and working_volume > total_volume
-        ):
+        if total_volume <= 0:
 
             st.error(
-                "Working volume exceeds calculated vessel capacity."
+                "Calculated vessel volume is zero or invalid. "
+                "Check reactor geometry inputs."
+            )
+
+        elif working_volume > total_volume:
+
+            st.error(
+                f"Working volume ({working_volume:.2f} m³) "
+                f"exceeds calculated vessel capacity "
+                f"({total_volume:.2f} m³). "
+                f"Current calculated fill is {fill:.1f}%. "
+                "Increase vessel dimensions or reduce the "
+                "working volume."
+            )
+
+        elif fill > 85.0:
+
+            st.warning(
+                f"High operating fill: {fill:.1f}%. "
+                "Review freeboard requirement and process "
+                "foaming / gas disengagement requirements."
             )
 
     # =====================================================
@@ -864,15 +861,9 @@ def reactor_input_panel(name):
 
         stages = []
 
-        try:
-
-            agitator_names = list(
-                AGITATORS.keys()
-            )
-
-        except Exception:
-
-            agitator_names = []
+        agitator_names = list(
+            AGITATORS.keys()
+        )
 
         if not agitator_names:
 
@@ -882,8 +873,6 @@ def reactor_input_panel(name):
             )
 
             return None
-
-        default_agitator = agitator_names[0]
 
         for stage_number, agitator_id in enumerate(
             agitator_ids,
@@ -901,16 +890,19 @@ def reactor_input_panel(name):
                 selected_agitator = st.selectbox(
                     "Agitator Type",
                     agitator_names,
-                    index=0,
                     key=(
                         f"{name}_agitator_"
                         f"{agitator_id}"
                     ),
                 )
 
-            spec = get_default_agitator_spec(
-                selected_agitator
+            spec = AGITATORS.get(
+                selected_agitator,
+                {},
             )
+
+            if not isinstance(spec, dict):
+                spec = {}
 
             with c2:
 
@@ -920,6 +912,14 @@ def reactor_input_panel(name):
                         0.40,
                     ),
                     0.40,
+                )
+
+                default_ratio = max(
+                    0.05,
+                    min(
+                        default_ratio,
+                        0.95,
+                    ),
                 )
 
                 ratio = st.number_input(
@@ -950,17 +950,27 @@ def reactor_input_panel(name):
 
             with c4:
 
+                blades_default = safe_int(
+                    spec.get(
+                        "blades",
+                        4,
+                    ),
+                    4,
+                )
+
+                blades_default = max(
+                    1,
+                    min(
+                        blades_default,
+                        20,
+                    ),
+                )
+
                 blades = st.number_input(
                     "Number of Blades",
                     min_value=1,
                     max_value=20,
-                    value=safe_int(
-                        spec.get(
-                            "blades",
-                            4,
-                        ),
-                        4,
-                    ),
+                    value=blades_default,
                     step=1,
                     key=(
                         f"{name}_blades_"
@@ -977,9 +987,14 @@ def reactor_input_panel(name):
                 clearance_default = min(
                     0.15 * tank_D,
                     max(
-                        tank_D * 0.5,
                         0.02,
+                        tank_D * 0.5,
                     ),
+                )
+
+                clearance_default = min(
+                    clearance_default,
+                    tank_D,
                 )
 
                 clearance = st.number_input(
@@ -989,10 +1004,7 @@ def reactor_input_panel(name):
                         tank_D,
                         0.1,
                     ),
-                    value=min(
-                        clearance_default,
-                        tank_D,
-                    ),
+                    value=clearance_default,
                     step=0.01,
                     key=(
                         f"{name}_clearance_"
@@ -1039,6 +1051,14 @@ def reactor_input_panel(name):
                     1.0,
                 )
 
+                np_default = max(
+                    0.001,
+                    min(
+                        np_default,
+                        50.0,
+                    ),
+                )
+
                 np_value = st.number_input(
                     "Power Number Np",
                     min_value=0.001,
@@ -1059,6 +1079,14 @@ def reactor_input_panel(name):
                         0.5,
                     ),
                     0.5,
+                )
+
+                nq_default = max(
+                    0.001,
+                    min(
+                        nq_default,
+                        10.0,
+                    ),
                 )
 
                 nq_value = st.number_input(
@@ -1111,51 +1139,21 @@ def reactor_input_panel(name):
             stages.append(
                 {
                     "stage": stage_number,
-
-                    "agitator":
-                        selected_agitator,
-
-                    "Np":
-                        np_value,
-
-                    "Nq":
-                        nq_value,
-
-                    "impeller_diameter_m":
-                        impeller_D,
-
-                    "D_T":
-                        ratio,
-
-                    "rpm":
-                        rpm,
-
-                    "number_impellers":
-                        1,
-
-                    "elevation_m":
-                        elevation,
-
-                    "clearance_m":
-                        clearance,
-
-                    "blades":
-                        int(blades),
-
-                    "density_kg_m3":
-                        density,
-
-                    "viscosity_pa_s":
-                        viscosity_cp / 1000.0,
-
-                    "tank_diameter_m":
-                        tank_D,
-
-                    "liquid_height_m":
-                        liquid_height,
-
-                    "working_volume_m3":
-                        working_volume,
+                    "agitator": selected_agitator,
+                    "Np": np_value,
+                    "Nq": nq_value,
+                    "impeller_diameter_m": impeller_D,
+                    "D_T": ratio,
+                    "rpm": rpm,
+                    "number_impellers": 1,
+                    "elevation_m": elevation,
+                    "clearance_m": clearance,
+                    "blades": int(blades),
+                    "density_kg_m3": density,
+                    "viscosity_pa_s": viscosity_cp / 1000.0,
+                    "tank_diameter_m": tank_D,
+                    "liquid_height_m": liquid_height,
+                    "working_volume_m3": working_volume,
                 }
             )
 
@@ -1234,73 +1232,33 @@ def reactor_input_panel(name):
                 )
 
             solids_data = {
-                "solids_wt_percent":
-                    solids_wt,
-
+                "solids_wt_percent": solids_wt,
                 "particle_diameter_m":
                     particle_d50_mm / 1000.0,
-
                 "solid_density_kg_m3":
                     solid_density,
-
-                "S":
-                    S_factor,
+                "S": S_factor,
             }
 
     return {
-        "name":
-            name,
-
-        "working_volume_m3":
-            working_volume,
-
-        "density_kg_m3":
-            density,
-
-        "viscosity_cp":
-            viscosity_cp,
-
-        "viscosity_pa_s":
-            viscosity_cp / 1000.0,
-
-        "surface_tension_mN_m":
-            surface_tension,
-
-        "surface_tension_n_m":
-            surface_tension / 1000.0,
-
-        "tank_diameter_m":
-            tank_D,
-
-        "straight_height_m":
-            straight_H,
-
-        "bottom_type":
-            bottom_type,
-
-        "top_type":
-            top_type,
-
-        "total_volume_m3":
-            total_volume,
-
-        "liquid_height_m":
-            liquid_height,
-
-        "fill_percent":
-            fill,
-
-        "baffles":
-            int(baffles),
-
-        "baffle_width_ratio":
-            baffle_width_ratio,
-
-        "stages":
-            stages,
-
-        "solids":
-            solids_data,
+        "name": name,
+        "working_volume_m3": working_volume,
+        "density_kg_m3": density,
+        "viscosity_cp": viscosity_cp,
+        "viscosity_pa_s": viscosity_cp / 1000.0,
+        "surface_tension_mN_m": surface_tension,
+        "surface_tension_n_m": surface_tension / 1000.0,
+        "tank_diameter_m": tank_D,
+        "straight_height_m": straight_H,
+        "bottom_type": bottom_type,
+        "top_type": top_type,
+        "total_volume_m3": total_volume,
+        "liquid_height_m": liquid_height,
+        "fill_percent": fill,
+        "baffles": int(baffles),
+        "baffle_width_ratio": baffle_width_ratio,
+        "stages": stages,
+        "solids": solids_data,
     }
 
 
@@ -1317,7 +1275,6 @@ for reactor_name in reactor_names:
     )
 
     if reactor is not None:
-
         reactors.append(
             reactor
         )
@@ -1329,10 +1286,6 @@ for reactor_name in reactor_names:
 
 for reactor in reactors:
 
-    # -----------------------------------------------------
-    # MAIN AGITATOR TRAIN CALCULATION
-    # -----------------------------------------------------
-
     try:
 
         calculation_output = calculate_train(
@@ -1341,10 +1294,7 @@ for reactor in reactors:
         )
 
         if (
-            isinstance(
-                calculation_output,
-                tuple,
-            )
+            isinstance(calculation_output, tuple)
             and len(calculation_output) >= 2
         ):
 
@@ -1356,12 +1306,6 @@ for reactor in reactors:
             results = []
             train = {}
 
-        if not isinstance(results, list):
-            results = list(results) if results else []
-
-        if not isinstance(train, dict):
-            train = {}
-
     except Exception as exc:
 
         st.error(
@@ -1370,63 +1314,26 @@ for reactor in reactors:
 
         results = []
 
+        train = {
+            "total_power_kw": 0.0,
+            "P_per_V_kW_m3": 0.0,
+            "total_Q_m3_h": 0.0,
+            "Q_per_volume_1_s": 0.0,
+            "maximum_reynolds": None,
+            "average_tip_speed_m_s": 0.0,
+            "turnover_time_min": None,
+            "total_torque_Nm": 0.0,
+        }
+
+    if not isinstance(results, list):
+        results = []
+
+    if not isinstance(train, dict):
         train = {}
 
-    # -----------------------------------------------------
-    # ENSURE TRAIN OUTPUT KEYS EXIST
-    # -----------------------------------------------------
-
-    train.setdefault(
-        "total_power_kw",
-        0.0,
-    )
-
-    train.setdefault(
-        "P_per_V_kW_m3",
-        0.0,
-    )
-
-    train.setdefault(
-        "total_Q_m3_h",
-        0.0,
-    )
-
-    train.setdefault(
-        "maximum_reynolds",
-        None,
-    )
-
-    train.setdefault(
-        "average_tip_speed_m_s",
-        0.0,
-    )
-
-    train.setdefault(
-        "turnover_time_min",
-        None,
-    )
-
-    train.setdefault(
-        "total_torque_Nm",
-        0.0,
-    )
-
-    # -----------------------------------------------------
-    # SAFE Q/V CALCULATION
-    # -----------------------------------------------------
-
-    qv_s = get_qv_per_second(
-        train,
-        reactor["working_volume_m3"],
-    )
-
-    train["Q_per_volume_1_s"] = qv_s
-
-    train["Q_per_volume_h"] = qv_s * 3600.0
-
-    # -----------------------------------------------------
+    # =====================================================
     # NJS
-    # -----------------------------------------------------
+    # =====================================================
 
     if process_type in [
         "Solid-Liquid",
@@ -1459,6 +1366,12 @@ for reactor in reactors:
                     ],
                 )
 
+                njs = (
+                    float(njs)
+                    if njs is not None
+                    else None
+                )
+
             except Exception:
 
                 njs = None
@@ -1472,8 +1385,7 @@ for reactor in reactors:
                         stage.get(
                             "rpm",
                             0.0,
-                        ),
-                        0.0,
+                        )
                     )
                     / njs
                 )
@@ -1483,7 +1395,6 @@ for reactor in reactors:
                 stage["N_over_Njs"] = None
 
     reactor["results"] = results
-
     reactor["train"] = train
 
     # =====================================================
@@ -1554,14 +1465,29 @@ for reactor in reactors:
             }
         ]
 
+    # Explicit geometry validation
+    if (
+        reactor["total_volume_m3"] > 0
+        and reactor["working_volume_m3"]
+        > reactor["total_volume_m3"]
+    ):
+
+        reactor["checks"].append(
+            {
+                "severity": "FAIL",
+                "message":
+                    (
+                        "Working volume exceeds calculated "
+                        "vessel capacity."
+                    ),
+            }
+        )
+
     try:
 
         reactor["status"] = overall_status(
             reactor["checks"]
         )
-
-        if reactor["status"] is None:
-            reactor["status"] = "REVIEW"
 
     except Exception:
 
@@ -1611,6 +1537,19 @@ active_status = active_reactor[
     "status"
 ]
 
+working_volume_active = safe_float(
+    active_reactor[
+        "working_volume_m3"
+    ]
+)
+
+qv_s = get_qv_s(
+    active_train,
+    working_volume_active,
+)
+
+qv_h = qv_s * 3600.0
+
 
 # =========================================================
 # KPI OVERVIEW
@@ -1626,69 +1565,58 @@ st.markdown(
 kpi_columns = st.columns(8)
 
 
-def display_train_value(
-    key,
-    default=0.0,
-):
+maximum_reynolds = active_train.get(
+    "maximum_reynolds"
+)
 
-    value = active_train.get(
-        key,
-        default,
+if maximum_reynolds is None:
+    maximum_re = "N/A"
+else:
+    maximum_re = (
+        f"{safe_float(maximum_reynolds):,.0f}"
     )
-
-    if value is None:
-        return default
-
-    return value
 
 
 kpis = [
     (
         "Working Volume",
-        f"{safe_float(active_reactor['working_volume_m3']):.2f}",
+        f"{working_volume_active:.2f}",
         "m³",
     ),
 
     (
         "Operating Fill",
-        f"{safe_float(active_reactor['fill_percent']):.1f}",
+        f"{safe_float(active_reactor.get('fill_percent')):.1f}",
         "%",
     ),
 
     (
         "Shaft Power",
-        f"{safe_float(display_train_value('total_power_kw')):.2f}",
+        f"{safe_float(active_train.get('total_power_kw')):.2f}",
         "kW",
     ),
 
     (
         "P/V",
-        f"{safe_float(display_train_value('P_per_V_kW_m3')):.3f}",
+        f"{safe_float(active_train.get('P_per_V_kW_m3')):.3f}",
         "kW/m³",
     ),
 
     (
         "Total Q",
-        f"{safe_float(display_train_value('total_Q_m3_h')):.1f}",
+        f"{safe_float(active_train.get('total_Q_m3_h')):.1f}",
         "m³/h",
     ),
 
     (
         "Q/V",
-        f"{get_qv_per_second(active_train, active_reactor['working_volume_m3']):.4f}",
-        "s⁻¹",
+        f"{qv_h:.2f}",
+        "h⁻¹",
     ),
 
     (
         "Maximum Re",
-        (
-            f"{safe_float(display_train_value('maximum_reynolds'), 0):,.0f}"
-            if display_train_value(
-                "maximum_reynolds",
-                None,
-            ) is not None
-            else "N/A"
-        ),
+        maximum_re,
         "",
     ),
 
@@ -1731,6 +1659,20 @@ for col, (
             """,
             unsafe_allow_html=True,
         )
+
+
+if (
+    active_reactor["total_volume_m3"] > 0
+    and active_reactor["working_volume_m3"]
+    > active_reactor["total_volume_m3"]
+):
+
+    st.error(
+        "Engineering geometry warning: the selected working "
+        "volume is greater than the calculated vessel volume. "
+        "The reactor geometry must be corrected before using "
+        "the result for equipment selection."
+    )
 
 
 # =========================================================
@@ -1844,7 +1786,7 @@ with tab_basis:
             st.info(
                 scaleup_description.get(
                     scaleup_basis,
-                    "Review the selected scale-up basis.",
+                    "Review selected scale-up basis.",
                 )
             )
 
@@ -1878,17 +1820,20 @@ with tab_geometry:
     for reactor in reactors:
 
         tank_diameter = safe_float(
-            reactor["tank_diameter_m"],
-            0.0,
+            reactor[
+                "tank_diameter_m"
+            ]
         )
 
         liquid_height_value = safe_float(
-            reactor["liquid_height_m"],
-            0.0,
+            reactor[
+                "liquid_height_m"
+            ]
         )
 
-        h_t = (
-            liquid_height_value / tank_diameter
+        H_T = (
+            liquid_height_value
+            / tank_diameter
             if tank_diameter > 0
             else 0.0
         )
@@ -1916,9 +1861,7 @@ with tab_geometry:
 
                 "Tank ID (m)":
                     round(
-                        reactor[
-                            "tank_diameter_m"
-                        ],
+                        tank_diameter,
                         3,
                     ),
 
@@ -1932,9 +1875,7 @@ with tab_geometry:
 
                 "Liquid Height (m)":
                     round(
-                        reactor[
-                            "liquid_height_m"
-                        ],
+                        liquid_height_value,
                         3,
                     ),
 
@@ -1948,7 +1889,7 @@ with tab_geometry:
 
                 "H/T":
                     round(
-                        h_t,
+                        H_T,
                         2,
                     ),
 
@@ -2131,12 +2072,16 @@ with tab_performance:
             "train"
         ]
 
-        qv_s = get_qv_per_second(
+        reactor_qv_s = get_qv_s(
             train,
-            reactor["working_volume_m3"],
+            reactor[
+                "working_volume_m3"
+            ],
         )
 
-        qv_h = qv_s * 3600.0
+        reactor_qv_h = (
+            reactor_qv_s * 3600.0
+        )
 
         c1, c2, c3 = st.columns(3)
 
@@ -2159,57 +2104,25 @@ with tab_performance:
 
         c1.metric(
             "Q/V",
-            f"{qv_s:.4f} s⁻¹",
-        )
-
-        c2.metric(
-            "Q/V",
-            f"{qv_h:.2f} h⁻¹",
+            f"{reactor_qv_h:.2f} h⁻¹",
         )
 
         turnover = train.get(
             "turnover_time_min"
         )
 
-        if turnover is not None:
-
-            turnover_text = (
-                f"{safe_float(turnover):.3f} min"
-            )
-
-        elif qv_s > 0:
-
-            turnover_text = (
-                f"{1.0 / qv_s / 60.0:.3f} min"
-            )
-
-        else:
-
-            turnover_text = "N/A"
-
-        c3.metric(
-            "Turnover Time",
-            turnover_text,
-        )
-
-        c1, c2 = st.columns(2)
-
-        c1.metric(
-            "Total Torque",
-            f"{safe_float(train.get('total_torque_Nm')):.1f} N·m",
-        )
-
-        maximum_re = train.get(
-            "maximum_reynolds"
-        )
-
         c2.metric(
-            "Maximum Reynolds Number",
+            "Turnover Time",
             (
-                f"{safe_float(maximum_re):,.0f}"
-                if maximum_re is not None
+                f"{safe_float(turnover):.3f} min"
+                if turnover is not None
                 else "N/A"
             ),
+        )
+
+        c3.metric(
+            "Total Torque",
+            f"{safe_float(train.get('total_torque_Nm')):.1f} N·m",
         )
 
         rows = []
@@ -2250,16 +2163,6 @@ with tab_performance:
                     "Torque (N·m)":
                         stage.get(
                             "torque_Nm"
-                        ),
-
-                    "Njs (RPM)":
-                        stage.get(
-                            "njs_rpm"
-                        ),
-
-                    "N/Njs":
-                        stage.get(
-                            "N_over_Njs"
                         ),
                 }
             )
@@ -2314,22 +2217,22 @@ with tab_scaleup:
             else 0.0
         )
 
-        reference_diameter = safe_float(
+        reference_tank_diameter = safe_float(
             reference[
                 "tank_diameter_m"
             ]
         )
 
-        target_diameter = safe_float(
+        target_tank_diameter = safe_float(
             target[
                 "tank_diameter_m"
             ]
         )
 
         diameter_ratio = (
-            target_diameter
-            / reference_diameter
-            if reference_diameter > 0
+            target_tank_diameter
+            / reference_tank_diameter
+            if reference_tank_diameter > 0
             else 0.0
         )
 
@@ -2353,12 +2256,12 @@ with tab_scaleup:
             )
         )
 
-        reference_qv = get_qv_per_second(
+        reference_qv = get_qv_s(
             reference_train,
             reference_volume,
         )
 
-        target_qv = get_qv_per_second(
+        target_qv = get_qv_s(
             target_train,
             target_volume,
         )
@@ -2416,36 +2319,34 @@ with tab_scaleup:
 
             reference_basis = {
                 "rpm":
-                    safe_float(
-                        ref_stage.get(
-                            "rpm",
-                            0.0,
-                        )
+                    ref_stage.get(
+                        "rpm",
+                        0.0,
                     ),
 
                 "impeller_diameter_m":
-                    safe_float(
-                        ref_stage.get(
-                            "impeller_diameter_m",
-                            0.0,
-                        )
+                    ref_stage.get(
+                        "impeller_diameter_m",
+                        0.0,
                     ),
 
                 "volume_m3":
-                    reference_volume,
+                    reference[
+                        "working_volume_m3"
+                    ],
             }
 
             target_basis = {
                 "impeller_diameter_m":
-                    safe_float(
-                        target_stage.get(
-                            "impeller_diameter_m",
-                            0.0,
-                        )
+                    target_stage.get(
+                        "impeller_diameter_m",
+                        0.0,
                     ),
 
                 "volume_m3":
-                    target_volume,
+                    target[
+                        "working_volume_m3"
+                    ],
             }
 
             try:
@@ -2460,7 +2361,6 @@ with tab_scaleup:
                     scale_result,
                     dict,
                 ):
-
                     scale_result = {}
 
                 target_rpm = scale_result.get(
@@ -2495,41 +2395,6 @@ with tab_scaleup:
                         else "N/A"
                     ),
                 )
-
-                if scale_result:
-
-                    st.markdown(
-                        "### Scale-Up Calculation Details"
-                    )
-
-                    scale_rows = []
-
-                    for key, value in scale_result.items():
-
-                        if isinstance(
-                            value,
-                            (int, float),
-                        ):
-
-                            scale_rows.append(
-                                {
-                                    "Parameter":
-                                        str(key),
-
-                                    "Calculated Value":
-                                        value,
-                                }
-                            )
-
-                    if scale_rows:
-
-                        st.dataframe(
-                            pd.DataFrame(
-                                scale_rows
-                            ),
-                            width="stretch",
-                            hide_index=True,
-                        )
 
             except Exception as exc:
 
@@ -2676,13 +2541,23 @@ with tab_scaleup:
                     "Q/V",
 
                 "Unit":
-                    "s⁻¹",
+                    "h⁻¹",
 
                 reference["name"]:
-                    reference_qv,
+                    get_qv_s(
+                        reference[
+                            "train"
+                        ],
+                        reference_volume,
+                    ) * 3600.0,
 
                 target["name"]:
-                    target_qv,
+                    get_qv_s(
+                        target[
+                            "train"
+                        ],
+                        target_volume,
+                    ) * 3600.0,
             },
         ]
 
@@ -2753,6 +2628,13 @@ with tab_validation:
                 item,
                 dict,
             ):
+                validation_rows.append(
+                    {
+                        "Status": "REVIEW",
+                        "Engineering Check": str(item),
+                    }
+                )
+
                 continue
 
             validation_rows.append(
@@ -2786,23 +2668,6 @@ with tab_validation:
             st.info(
                 "No validation checks were returned."
             )
-
-        recommendations_list = reactor.get(
-            "recommendations",
-            [],
-        )
-
-        if recommendations_list:
-
-            st.markdown(
-                "#### Engineering Recommendations"
-            )
-
-            for item in recommendations_list:
-
-                st.info(
-                    str(item)
-                )
 
 
 # =========================================================
@@ -2987,8 +2852,7 @@ with tab_report:
     else:
 
         st.info(
-            "No additional engineering recommendations "
-            "were returned by the validation module."
+            "No engineering recommendations were returned."
         )
 
 
@@ -3007,3 +2871,4 @@ st.caption(
     "selection requires vendor confirmation, mechanical "
     "design and process safety review."
 )
+```
