@@ -1,9 +1,9 @@
-from .report_generator import (
-    create_word_report,
-    create_excel_report,
-)
+"""
+Engineering reporting package.
+"""
+
+from .report_generator import build_pdf
 
 __all__ = [
-    "create_word_report",
-    "create_excel_report",
+    "build_pdf",
 ]
