@@ -1,3 +1,1 @@
-"""
-Engineering libraries package.
-"""
+# Libraries package
