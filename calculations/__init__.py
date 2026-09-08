@@ -1,3 +1,5 @@
 """
-Calculations package for Reactor Scale-Up Engineering Studio.
+Calculation package.
+
+No legacy imports are intentionally performed here.
 """
